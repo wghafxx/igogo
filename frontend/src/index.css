@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: 'Rubik', 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #0d0e12;
+    color: #ffffff;
+}
+
+@layer base {
+  :root {
+        --background: 228 14% 6%;
+        --foreground: 0 0% 100%;
+        --card: 230 10% 11%;
+        --card-foreground: 0 0% 100%;
+        --popover: 230 10% 11%;
+        --popover-foreground: 0 0% 100%;
+        --primary: 202 100% 50%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 230 8% 16%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 230 8% 16%;
+        --muted-foreground: 225 8% 60%;
+        --accent: 32 100% 50%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 230 8% 18%;
+        --input: 230 8% 18%;
+        --ring: 202 100% 50%;
+        --radius: 0.5rem;
+        --blox-blue: #00a2ff;
+        --blox-orange: #ff8a00;
+        --blox-bg: #0d0e12;
+        --blox-panel: #16171d;
+        --blox-panel-2: #1c1d25;
+        --blox-border: #262833;
+    }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2c38; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3d4d; }
+
+::selection { background: rgba(0, 162, 255, 0.35); color: #fff; }
+
+.blox-panel {
+  background: var(--blox-panel);
+  border-radius: 12px;
+}
+
+.blox-btn-primary {
+  background: var(--blox-blue);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 8px;
+  box-shadow: 0 4px 0 #0072b8, 0 8px 20px rgba(0, 162, 255, 0.25);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.blox-btn-primary:hover { background: #22afff; }
+.blox-btn-primary:active { transform: translateY(3px); box-shadow: 0 1px 0 #0072b8, 0 4px 10px rgba(0,162,255,0.2); }
+.blox-btn-primary:disabled { background: #2a2c38; color: #6b6f85; box-shadow: none; transform: none; cursor: not-allowed; }
+
+.blox-chip {
+  background: var(--blox-panel-2);
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+.blox-chip:hover { background: #262833; }
+
+.blox-toggle {
+  background: #0f1015;
+  color: #a4a7b8;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.blox-toggle:hover { color: #fff; background: #23242d; }
+.blox-toggle.active { color: #fff; background: var(--blox-blue); }
+
+.skin-slot {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 50% 40%, #232430 0%, #1b1c23 70%);
+  overflow: hidden;
+}
+
+.upgrade-slot {
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 162, 255, 0.18) 0%, rgba(0, 162, 255, 0.05) 38%, transparent 68%);
+}
+
+.drop-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--blox-panel);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+  animation: drop-in 0.35s ease;
+}
+.drop-card:hover { background: #1f2028; transform: translateX(2px); }
+@keyframes drop-in { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+/* hover: item face slides up & out, user face slides in from the bottom */
+.drop-face {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+  will-change: transform, opacity;
+}
+.drop-face-user { transform: translateY(110%); opacity: 0; }
+.drop-card:hover .drop-face-item { transform: translateY(-110%); opacity: 0; }
+.drop-card:hover .drop-face-user { transform: translateY(0); opacity: 1; }
+.drop-img { transition: transform 0.28s ease; }
+.drop-card:hover .drop-img { transform: scale(1.1); }
+
+.gold-nick {
+  color: #ffd766;
+  background: linear-gradient(90deg, #ffb000 0%, #ffe38a 45%, #ffb000 60%, #ffcf4d 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 12px rgba(255, 176, 0, 0.35);
+  animation: gold-shimmer 3s linear infinite;
+}
+@keyframes gold-shimmer { to { background-position: -200% 0; } }
+
+.gauge-ring {
+  transform-origin: 150px 150px;
+  transition: transform 5s cubic-bezier(0.15, 0.85, 0.15, 1);
+}
+.gauge-ring.fast { transition-duration: 2s; }
+.gauge-ring.reset { transition: none; }
+
+.fade-up { animation: fade-up 0.5s ease both; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.pulse-dot { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

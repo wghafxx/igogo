@@ -1,0 +1,340 @@
+.App { min-width: 0; }
+button:focus-visible, a:focus-visible { outline: 2px solid #00a2ff; outline-offset: 3px; }
+[data-testid="profile-page"] input { min-width: 0; }
+[data-testid="tos-page"] h1 { overflow-wrap: anywhere; }
+@media (max-width: 639px) {
+  [data-testid="profile-item-history"] > div,
+  [data-testid="profile-games-history"] > div,
+  [data-testid="profile-payment-item"] {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    gap: 8px;
+  }
+  [data-testid="profile-item-history"] > div > span,
+  [data-testid="profile-games-history"] > div > span,
+  [data-testid="profile-payment-item"] > span { width: auto; }
+  [data-testid="bank-tab"] .tabular-nums { overflow-wrap: anywhere; }
+}
+.App {
+  min-height: 100vh;
+  background: #0d0e12;
+}
+
+/* ---------- Discord button ---------- */
+.discord-btn {
+  background: #5865f2;
+  color: #fff;
+  box-shadow: 0 4px 0 #3c45b8, 0 8px 22px rgba(88, 101, 242, 0.3);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.discord-btn:hover { background: #6a76ff; }
+.discord-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #3c45b8, 0 4px 10px rgba(88, 101, 242, 0.25); }
+.discord-btn:disabled { background: #2a2c38; color: #6b6f85; box-shadow: none; transform: none; cursor: not-allowed; }
+
+/* ---------- Auth page backdrop ---------- */
+.auth-bg {
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(0, 162, 255, 0.12), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 80% 100%, rgba(255, 138, 0, 0.08), transparent 70%);
+}
+
+/* ---------- Rarity ---------- */
+.skin-card {
+  border: 1px solid transparent;
+  box-shadow: inset 0 -3px 0 var(--rarity);
+  transition: border-color 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+.skin-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--rarity) 28%, transparent) 0%, transparent 65%);
+  pointer-events: none;
+}
+.skin-card:hover,
+.skin-card.selected {
+  border-color: var(--rarity);
+  box-shadow: inset 0 -3px 0 var(--rarity), 0 0 18px color-mix(in srgb, var(--rarity) 40%, transparent);
+  transform: translateY(-2px);
+}
+.rarity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--rarity);
+  box-shadow: 0 0 8px var(--rarity);
+}
+
+.rarity-chip {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--rarity);
+  background: #0f1015;
+  border: 1px solid color-mix(in srgb, var(--rarity) 35%, transparent);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+.rarity-chip:hover { border-color: var(--rarity); transform: translateY(-1px); }
+.rarity-chip.active {
+  background: color-mix(in srgb, var(--rarity) 18%, #0f1015);
+  border-color: var(--rarity);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--rarity) 45%, transparent);
+}
+
+/* ---------- Upgrade reel (case -> flying items -> knife) ---------- */
+.reel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--reel-h);
+  --card-w: 150px;
+  --card-h: 150px;
+  --reel-h: 190px;
+  --cycle: 6.4s;
+}
+.reel-lg { --card-w: 200px; --card-h: 200px; --reel-h: 250px; }
+
+.reel-side {
+  position: absolute;
+  top: 50%;
+  width: calc(var(--card-w) * 0.7);
+  height: calc(var(--card-h) * 0.7);
+  transform: translateY(-50%);
+  border-radius: 10px;
+  background: #14151b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+}
+.reel-side-left { left: calc(50% - var(--card-w) * 0.5 - var(--card-w) * 0.7 - 22px); }
+.reel-side-right { right: calc(50% - var(--card-w) * 0.5 - var(--card-w) * 0.7 - 22px); }
+.reel-side-img { width: 72%; height: 72%; object-fit: contain; filter: brightness(0.12) grayscale(1); }
+
+.reel-frame {
+  position: relative;
+  padding: 10px;
+  border-radius: 20px;
+  background: #0f1015;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.reel-card {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: 14px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #232430 0%, #16171d 78%);
+  border: 2px solid var(--start);
+  animation: reel-border var(--cycle) linear infinite;
+}
+.reel-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255, 226, 122, 0.35) 0%, transparent 62%);
+  animation: reel-glow var(--cycle) linear infinite;
+}
+.reel-item {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reel-img {
+  width: 68%;
+  height: 68%;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.65));
+  margin-top: -8%;
+}
+.reel-start { animation: reel-start var(--cycle) cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.reel-final { animation: reel-final var(--cycle) cubic-bezier(0.34, 1.4, 0.64, 1) infinite; }
+
+.reel-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  animation: reel-strip var(--cycle) linear infinite;
+  will-change: transform;
+}
+.reel-strip-img {
+  width: 100%;
+  height: var(--card-h);
+  object-fit: contain;
+  padding: 14%;
+  flex-shrink: 0;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.65));
+}
+.reel-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  animation: reel-flash var(--cycle) linear infinite;
+}
+
+.reel-caption {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 10px;
+  text-align: center;
+}
+.reel-caption-type { font-size: 9px; color: #7d8194; text-transform: uppercase; letter-spacing: 0.06em; }
+.reel-caption-name { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reel-lg .reel-caption-type { font-size: 10px; }
+.reel-lg .reel-caption-name { font-size: 15px; }
+
+/* timeline: 0-16% case | 18-70% items fly top->bottom | 72-100% knife */
+@keyframes reel-start {
+  0%, 2% { opacity: 0; transform: translateY(-40%) scale(0.9); }
+  6%, 16% { opacity: 1; transform: translateY(0) scale(1); }
+  22%, 100% { opacity: 0; transform: translateY(110%) scale(0.9); }
+}
+@keyframes reel-strip {
+  0%, 17% { opacity: 0; transform: translateY(-66.667%); }
+  19% { opacity: 1; }
+  68% { opacity: 1; transform: translateY(0); }
+  71%, 100% { opacity: 0; transform: translateY(6%); }
+}
+@keyframes reel-final {
+  0%, 69% { opacity: 0; transform: translateY(-110%) scale(0.85); }
+  76% { opacity: 1; transform: translateY(0) scale(1.06); }
+  80%, 96% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(0) scale(1); }
+}
+@keyframes reel-border {
+  0%, 16% { border-color: var(--start); box-shadow: 0 0 0 rgba(0,0,0,0); }
+  20%, 68% { border-color: #ffc634; box-shadow: 0 0 22px rgba(255, 198, 52, 0.45); }
+  74%, 96% { border-color: var(--final); box-shadow: 0 0 28px color-mix(in srgb, var(--final) 55%, transparent); }
+  100% { border-color: var(--start); box-shadow: 0 0 0 rgba(0,0,0,0); }
+}
+@keyframes reel-glow {
+  0%, 16% { opacity: 0.15; }
+  20%, 68% { opacity: 0.7; }
+  74%, 96% { opacity: 1; }
+  100% { opacity: 0.15; }
+}
+@keyframes reel-flash {
+  0%, 70% { opacity: 0; }
+  72% { opacity: 0.55; }
+  78%, 100% { opacity: 0; }
+}
+
+/* ---------- Darkened gloves behind slot icons ---------- */
+.slot-bg { position: relative; overflow: hidden; }
+.slot-ghost {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 92%;
+  height: 92%;
+  transform: translate(-50%, -50%);
+  object-fit: contain;
+  filter: brightness(0.16) grayscale(1);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- Selected skin fills the slot ---------- */
+.slot-item {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--rarity) 24%, #1a1b22) 0%, #14151b 78%);
+  box-shadow: inset 0 -4px 0 var(--rarity);
+}
+.slot-item-img {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  padding: 6px 14%;
+  filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.65));
+}
+.target-remove {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(13, 14, 18, 0.85);
+  color: #9a9db0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.target-remove:hover { color: #fff; background: #ff5c5c; }
+
+/* ---------- Inventory item actions (sell / withdraw) ---------- */
+.inv-card { position: relative; }
+.inv-card .inv-actions {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(10, 11, 15, 0.82);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.inv-card.active .inv-actions { opacity: 1; transform: scale(1); pointer-events: auto; }
+.inv-card.active .skin-card { border-color: var(--rarity); }
+
+.btn-sell, .btn-withdraw {
+  height: 30px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.btn-sell { background: #ffb000; color: #14100a; box-shadow: 0 3px 0 #b87d00; }
+.btn-sell:hover { background: #ffc233; }
+.btn-sell:active { transform: translateY(2px); box-shadow: 0 1px 0 #b87d00; }
+.btn-withdraw { background: #eef0f7; color: #0f1015; box-shadow: 0 3px 0 #9ea3b8; }
+.btn-withdraw:hover { background: #ffffff; }
+.btn-withdraw:active { transform: translateY(2px); box-shadow: 0 1px 0 #9ea3b8; }
+.btn-sell:disabled, .btn-withdraw:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-lg { height: 36px; padding: 0 16px; font-size: 12px; }
+
+/* ---------- Mobile helpers ---------- */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+@media (max-width: 639px) {
+  .target-remove { top: 8px; right: 8px; width: 24px; height: 24px; }
+  .slot-item-img { padding: 4px 12%; }
+}

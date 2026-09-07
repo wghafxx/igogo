@@ -1,0 +1,95 @@
+import { useEffect, useState, useCallback, useRef } from "react";
+import { api, getSessionId } from "../lib/api";
+import { useAuth } from "./useAuth";
+
+const DEFAULT_SETTINGS = {
+  multipliers: [2, 4, 8],
+  percents: [35, 55, 75],
+  sound: false,
+  fastSpin: false,
+};
+
+export const loadSettings = () => {
+  try {
+    const raw = localStorage.getItem("bloxgrade_settings");
+    return normalizeSettings(raw ? JSON.parse(raw) : DEFAULT_SETTINGS);
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
+
+export const normalizeSettings = (value) => {
+  const s = value && typeof value === "object" ? value : {};
+  const list = (key, min, max) => [...new Set([
+    ...(Array.isArray(s[key]) ? s[key] : []).filter((v) => Number.isFinite(Number(v))).map((v) => Math.max(min, Math.min(max, Math.round(Number(v))))),
+    ...DEFAULT_SETTINGS[key],
+  ])].slice(0, 3);
+  return {
+    multipliers: list("multipliers", 2, 100), percents: list("percents", 1, 75),
+    sound: typeof s.sound === "boolean" ? s.sound : DEFAULT_SETTINGS.sound,
+    fastSpin: typeof s.fastSpin === "boolean" ? s.fastSpin : DEFAULT_SETTINGS.fastSpin,
+  };
+};
+export const saveSettings = (s) => {
+  try { localStorage.setItem("bloxgrade_settings", JSON.stringify(normalizeSettings(s))); } catch { /* Settings remain usable for this visit. */ }
+};
+export { DEFAULT_SETTINGS };
+
+export function useSession() {
+  const { authUser, setAuthUser } = useAuth();
+  const sessionId = authUser?.session_id || getSessionId();
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+  const [stats, setStats] = useState({ online: 0, upgrades: 0 });
+  const [user, setUser] = useState({ balance: 0, nickname: "Player", skins: [] });
+  const [drops, setDrops] = useState([]);
+  const userRefreshPaused = useRef(false);
+  const pauseUserRefresh = useCallback((value) => { userRefreshPaused.current = value; }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await api.user(sessionId);
+      if (u.session_id === sessionIdRef.current) {
+        setUser(u);
+        setAuthUser((old) => old?.session_id === u.session_id ? u : old);
+      }
+    } catch (e) {
+      console.error("user fetch failed", e);
+    }
+  }, [sessionId, setAuthUser]);
+
+  const refreshDrops = useCallback(async () => {
+    try {
+      setDrops(await api.liveDrops(30));
+    } catch (e) {
+      console.error("drops fetch failed", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setUser({ balance: 0, nickname: "Player", skins: [] });
+    const beat = async () => {
+      try {
+        const s = await api.presence(sessionId);
+        if (alive) setStats(s);
+      } catch (e) {
+        console.error("presence failed", e);
+      }
+    };
+    beat();
+    refreshUser();
+    refreshDrops();
+    const t1 = setInterval(beat, 15000);
+    const t2 = setInterval(refreshDrops, 5000);
+    const t3 = setInterval(() => { if (!userRefreshPaused.current) refreshUser(); }, 15000);
+    return () => {
+      alive = false;
+      clearInterval(t1);
+      clearInterval(t2);
+      clearInterval(t3);
+    };
+  }, [sessionId, refreshUser, refreshDrops]);
+
+  return { sessionId, stats, setStats, user, setUser, refreshUser, drops, refreshDrops, pauseUserRefresh };
+}
