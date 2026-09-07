@@ -53,7 +53,7 @@ const InventoryCard = ({ item, active, onToggle, onSell, onWithdraw, busy }) => 
 
 export default function ProfilePage() {
   const { authUser, loading, setAuthUser } = useAuth();
-  const { refreshUser } = useSessionCtx();
+  const { refreshUser, openWithdrawalSupport } = useSessionCtx();
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("inventory");
   const [active, setActive] = useState(null);
@@ -77,7 +77,7 @@ export default function ProfilePage() {
   const skins = data?.user?.skins || [];
   const invTotal = inventoryTotal(skins);
 
-  const act = async (fn, uids, msg) => {
+  const act = async (fn, uids, msg, onSuccess) => {
     if (!uids.length || busy) return;
     setBusy(true);
     try {
@@ -85,6 +85,7 @@ export default function ProfilePage() {
       setAuthUser(u);
       setActive(null);
       toast.success(msg(uids.length));
+      onSuccess?.(uids.length);
       load();
       refreshUser();
     } catch (e) {
@@ -94,7 +95,7 @@ export default function ProfilePage() {
     }
   };
   const sell = (uids) => act(api.sellSkins, uids, (n) => `Продано ${n} предм. — баланс пополнен`);
-  const withdraw = (uids) => act(api.withdrawSkins, uids, (n) => `Заявка на вывод ${n} предм. создана`);
+  const withdraw = (uids) => act(api.withdrawSkins, uids, (n) => `Заявка на вывод ${n} предм. создана`, openWithdrawalSupport);
 
   return (
     <div className="max-w-[1000px] mx-auto space-y-4" data-testid="profile-page">

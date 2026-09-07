@@ -16,13 +16,16 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import ProfilePage from "./pages/ProfilePage";
 import PublicProfilePage from "./pages/PublicProfilePage";
 import AdminPage from "./pages/AdminPage";
+import { SupportDialog, SUPPORT_HANDLE } from "./components/SupportDialog";
 
 // Header + live-drop feed shared by every page
 const Shell = () => {
   const session = useSession();
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [supportRequest, setSupportRequest] = useState(null);
+  const openWithdrawalSupport = (count) => setSupportRequest({ kind: "withdrawal", count });
   return (
-    <SessionProvider value={{ ...session, topUpOpen, setTopUpOpen }}>
+    <SessionProvider value={{ ...session, topUpOpen, setTopUpOpen, openWithdrawalSupport }}>
       <div className="min-h-screen bg-[#0d0e12] text-white">
         <Header stats={session.stats} user={session.user} topUpOpen={topUpOpen} setTopUpOpen={setTopUpOpen} />
         <div className="flex">
@@ -31,10 +34,14 @@ const Shell = () => {
             <LiveDropStrip drops={session.drops} />
             <div className="px-3 py-4 sm:px-4 sm:py-6">
               <Outlet />
+              <footer className="pt-7 pb-2 text-center">
+                <button type="button" onClick={() => setSupportRequest({ kind: "general" })} className="text-xs text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-support-button">Поддержка · {SUPPORT_HANDLE}</button>
+              </footer>
             </div>
           </main>
         </div>
       </div>
+      <SupportDialog request={supportRequest} onClose={() => setSupportRequest(null)} />
     </SessionProvider>
   );
 };

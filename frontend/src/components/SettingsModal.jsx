@@ -102,8 +102,8 @@ export default function SettingsModal({ open, onOpenChange, settings, onSave }) 
           <div>
             <div className="font-bold text-[14px] mb-2">Звук в апгрейде</div>
             <RadioGroup value={draft.sound ? "on" : "off"} onValueChange={(v) => setDraft((d) => ({ ...d, sound: v === "on" }))} className="space-y-2" data-testid="sound-radio">
-              <RadioOption value="on" title="Включен" desc="Нажатия кнопок; в конце прокрутки: повышение уровня при победе, разбитое стекло при поражении" />
-              <RadioOption value="off" title="Выключен" desc="Значение по умолчанию. Звуковые эффекты в апгрейде в беззвучном режиме" />
+              <RadioOption value="on" title="Включен" desc="Включается при каждом заходе. В конце прокрутки: повышение уровня при победе, разбитое стекло при поражении" />
+              <RadioOption value="off" title="Выключен" desc="Отключить звук до следующего захода или обновления страницы" />
             </RadioGroup>
           </div>
 

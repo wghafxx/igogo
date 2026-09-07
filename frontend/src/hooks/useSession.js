@@ -5,16 +5,20 @@ import { useAuth } from "./useAuth";
 const DEFAULT_SETTINGS = {
   multipliers: [2, 4, 8],
   percents: [35, 55, 75],
-  sound: false,
+  sound: true,
   fastSpin: false,
 };
+
+// Mute lasts only for this page visit, including client-side navigation.
+// A reload/new tab starts a new module instance with sound enabled again.
+let visitSoundEnabled = true;
 
 export const loadSettings = () => {
   try {
     const raw = localStorage.getItem("bloxgrade_settings");
-    return normalizeSettings(raw ? JSON.parse(raw) : DEFAULT_SETTINGS);
+    return { ...normalizeSettings(raw ? JSON.parse(raw) : DEFAULT_SETTINGS), sound: visitSoundEnabled };
   } catch {
-    return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, sound: visitSoundEnabled };
   }
 };
 
@@ -31,7 +35,9 @@ export const normalizeSettings = (value) => {
   };
 };
 export const saveSettings = (s) => {
-  try { localStorage.setItem("bloxgrade_settings", JSON.stringify(normalizeSettings(s))); } catch { /* Settings remain usable for this visit. */ }
+  const clean = normalizeSettings(s);
+  visitSoundEnabled = clean.sound;
+  try { localStorage.setItem("bloxgrade_settings", JSON.stringify(clean)); } catch { /* Settings remain usable for this visit. */ }
 };
 export { DEFAULT_SETTINGS };
 
