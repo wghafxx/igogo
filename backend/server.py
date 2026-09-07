@@ -1286,7 +1286,27 @@ async def upgrade(payload: UpgradeIn, request: Request):
     )
 
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+STATIC_DIR = ROOT_DIR / "static"
+
+@api_router.get("/health")
+async def health():
+    return {"ok": True}
+
+
 app.include_router(api_router)
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR / "static"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str):
+        file = STATIC_DIR / full_path
+        if full_path and file.is_file():
+            return FileResponse(file)
+        return FileResponse(STATIC_DIR / "index.html")
 
 app.add_middleware(
     CORSMiddleware,
