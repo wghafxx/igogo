@@ -99,19 +99,20 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
   }, [targetKey, busyRef]);
 
   const clampChance = (c) => Math.max(cfg.min_chance, Math.min(MAX_CHANCE, c));
-  // shown chance already includes the house edge: bet / price * RTP
-  const effectiveChance = target && totalBet > 0 && targetPriceNum > 0 ? clampChance((totalBet / targetPriceNum) * RTP) : chance;
+  // Показ: bet / price без house edge (20 на кейс 40 = 50%).
+  // Реальный шанс победы (с RTP) считает только сервер и на дроп не влияет.
+  const effectiveChance = target && totalBet > 0 && targetPriceNum > 0 ? clampChance(totalBet / targetPriceNum) : chance;
 
   const applyQuick = (c) => {
     playTick(settings.sound);
     setLockedChance(null);
     setResult(null);
     setChance(c);
-    if (target && targetPriceNum > 0) setBet(Math.max(0, Math.min(maxBet, Math.round(((targetPriceNum * c) / RTP - skinsTotal) * 100) / 100)));
+    if (target && targetPriceNum > 0) setBet(Math.max(0, Math.min(maxBet, Math.round((targetPriceNum * c - skinsTotal) * 100) / 100)));
   };
   const pickMultiplier = (x) => {
     setActiveQuick(`x${x}`);
-    applyQuick(clampChance(RTP / x));
+    applyQuick(clampChance(1 / x));
   };
   const pickPercent = (p) => {
     setActiveQuick(`p${p}`);

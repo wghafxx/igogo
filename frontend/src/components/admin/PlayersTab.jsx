@@ -24,7 +24,7 @@ export default function PlayersTab({ refreshKey = 0 }) {
   return (
     <div className="space-y-3" data-testid="players-tab">
       <div className="rounded-lg bg-[#00a2ff]/10 border border-[#00a2ff]/40 px-3 py-2.5 text-[12px] text-[#b4d9ff] leading-snug" data-testid="players-hint">
-        Расчётный шанс: ставка / цена × RTP. Действующая защита банка может заменять выигрыши проигрышами; они также включены в колонку «сливов». Фактический RTP зависит от этих отказов и случайных результатов; личный RTP может превышать 100%.
+        Показ игроку: шанс = ставка / цена; реальная победа: × RTP. Действующая защита банка может заменять выигрыши проигрышами; они также включены в колонку «сливов». Фактический RTP зависит от этих отказов и случайных результатов; личный RTP может превышать 100%.
       </div>
       {rows.length === 0 && <div className="blox-panel h-[160px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="players-empty">Игр пока не было</div>}
       {rows.length > 0 && (

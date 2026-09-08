@@ -22,7 +22,7 @@ const DropCard = ({ d, className = "", style = {} }) => {
       <div className="flex items-center justify-between text-[10px] text-[#00a2ff] font-bold">
         <span className="flex items-center gap-1">
           <Logo size={10} />
-          {(d.chance * 100).toFixed(2)}%
+          {(Number(d.display_chance ?? d.chance) * 100).toFixed(2)}%
         </span>
         <span className="text-[#8e91a3] tabular-nums font-semibold flex items-center gap-0.5">
           {formatMoney(d.item_price)} <RobuxIcon size={8} />

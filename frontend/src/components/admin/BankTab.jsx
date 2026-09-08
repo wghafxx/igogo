@@ -23,7 +23,7 @@ const Stat = ({ label, value, tone = "", testId, hint }) => (
 );
 
 const SETTINGS = [
-  { key: "rtp_target", label: "RTP (доля возврата игрокам)", hint: "Шанс = ставка / цена × RTP. Это расчётная вероятность: действующая защита банка может заменить выигрыш проигрышем при нехватке средств или блокировки.", min: 75, max: 100, fmt: (v) => `${v}% · комиссия ${100 - v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
+  { key: "rtp_target", label: "RTP (доля возврата игрокам)", hint: "Показ игроку: шанс = ставка / цена. Реальная победа: ставка / цена × RTP. Защита банка может заменить выигрыш проигрышем при нехватке средств или блокировки.", min: 75, max: 100, fmt: (v) => `${v}% · комиссия ${100 - v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
 ];
 
 const SettingRow = ({ s, value, onSaved }) => {
@@ -165,7 +165,7 @@ export default function BankTab({ refreshKey = 0 }) {
   return (
     <div className="space-y-4" data-testid="bank-tab">
       <div className={`rounded-lg px-3 py-2.5 text-[12px] leading-snug border ${bannerCls}`} data-testid="bank-status-banner">
-        <b>Шанс = ставка / цена × {Math.round(settings.rtp_target * 100)}%. Комиссия {Math.round((1 - settings.rtp_target) * 100)}%.</b> Выплаты ограничены пулом выдачи: суммарная выдача никогда не превысит RTP × все ставки. Если пул пуст, выигрыш по роллу тихо засчитывается как проигрыш. Красный — обязательства превышают банк; жёлтый — чистая позиция &lt; 20% обязательств.
+        <b>Показ: шанс = ставка / цена. Реально: × {Math.round(settings.rtp_target * 100)}% (комиссия {Math.round((1 - settings.rtp_target) * 100)}%).</b> Выплаты ограничены пулом выдачи: суммарная выдача никогда не превысит RTP × все ставки. Если пул пуст, выигрыш по роллу тихо засчитывается как проигрыш. Красный — обязательства превышают банк; жёлтый — чистая позиция &lt; 20% обязательств.
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

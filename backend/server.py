@@ -201,6 +201,8 @@ class Drop(BaseModel):
     item_image: Optional[str] = None
     item_rarity: Optional[str] = None
     chance: float
+    # Показываемый % (без house edge): bet/price. Реальный шанс победы — `chance`.
+    display_chance: Optional[float] = None
     avatar: Optional[str] = None
     discord_id: Optional[str] = None
     gold_nick: bool = False
@@ -220,6 +222,8 @@ class UpgradeOut(BaseModel):
     win: bool
     roll: float
     chance: float
+    # Показываемый % (bet/price без RTP). Дроп/логика победы используют `chance`.
+    display_chance: Optional[float] = None
     angle: float
     balance: float
     upgrades_total: int
@@ -426,6 +430,14 @@ def upgrade_rate_ok(session_id: str) -> bool:
 
 def win_chance(total_bet: float, target_price: float, rtp: float) -> float:
     return min(MAX_CHANCE, total_bet / target_price * rtp)
+
+
+def shown_chance(total_bet: float, target_price: float) -> float:
+    """Только для показа: bet/price без house edge (20 на кейс 40 = 50%).
+    На победу/дроп не влияет — победа считается по win_chance()."""
+    if target_price <= 0:
+        return 0.0
+    return min(MAX_CHANCE, total_bet / target_price)
 
 
 def max_bet_ratio(rtp: float) -> float:
@@ -790,7 +802,8 @@ async def profile(request: Request):
                 "created_at": u["created_at"],
                 "bet_amount": u.get("bet_amount", 0),
                 "items_total": u.get("items_total", 0),
-                "chance": u.get("chance"),
+                "chance": u.get("display_chance", u.get("chance")),
+                "display_chance": u.get("display_chance", u.get("chance")),
                 "win": u.get("win"),
                 "target": u.get("target_item"),
             }
@@ -1274,6 +1287,8 @@ async def upgrade(payload: UpgradeIn, request: Request):
     await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": total_bet * rtp}}, upsert=True)
 
     # the roll itself is honest and independent of the bank; only the payout decision is serialized
+    # `chance` — реальный шанс победы (с RTP), `shown` — только цифра для UI (без RTP).
+    shown = shown_chance(total_bet, target_price)
     roll = _rng.random()
     win = abs(roll * 360 - 180) < chance * 180
     forced_loss = False
@@ -1289,7 +1304,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
             protection.update({**solvency, "bank_can_pay": bank_can_pay})
             if not lock.leased or not bank_can_pay:
                 win, forced_loss, forced_reason = False, True, ("lock" if not lock.leased else "bank")
-                roll = losing_roll(chance)
+                roll = losing_roll(shown)
             else:
                 # pool ceiling: pay the prize only while the pool still holds budget for it
                 paid_state = await db.bank_state.find_one_and_update(
@@ -1299,12 +1314,14 @@ async def upgrade(payload: UpgradeIn, request: Request):
                 )
                 if not paid_state:
                     win, forced_loss, forced_reason = False, True, "pool"
-                    roll = losing_roll(chance)
+                    roll = losing_roll(shown)
                 else:
                     protection["pool"] = float(paid_state["pool"])
                     target = {**shop_item, "uid": str(uuid.uuid4())}
                     await db.users.update_one({"session_id": payload.session_id}, {"$push": {"skins": target}})
-    angle = landing_angle(roll, chance, win)
+    # Угол считается от показываемой зоны, чтобы проигрыш никогда визуально не падал в зелёную зону.
+    # Победа при этом всегда внутри и реальной зоны (shown >= chance при RTP<=1).
+    angle = landing_angle(roll, shown, win)
 
     writes = [db.upgrades.insert_one({
         "id": upgrade_id,
@@ -1314,6 +1331,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         "items_total": items_total,
         "target_item": shop_item,
         "chance": chance,
+        "display_chance": shown,
         "roll": roll,
         "win": win,
         "forced_loss": forced_loss,
@@ -1331,6 +1349,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
             item_image=target.get("image"),
             item_rarity=target.get("rarity"),
             chance=chance,
+            display_chance=shown,
             avatar=user.get("avatar"),
             discord_id=user.get("discord_id"),
             gold_nick=bool(user.get("gold_nick")),
@@ -1347,6 +1366,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         win=win,
         roll=roll,
         chance=chance,
+        display_chance=shown,
         angle=angle,
         balance=new_balance,
         upgrades_total=upgrades_total,

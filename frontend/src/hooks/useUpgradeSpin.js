@@ -46,7 +46,7 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
       const res = await api.upgrade(payload);
       if (!alive.current) return;
       pending.current = res;
-      latest.current.onChance(res.chance);
+      latest.current.onChance(res.display_chance ?? res.chance);
       setRotation((r) => r + 4 * 360 + (((180 + res.angle - r) % 360) + 360) % 360);
     } catch (error) {
       if (!alive.current) return;

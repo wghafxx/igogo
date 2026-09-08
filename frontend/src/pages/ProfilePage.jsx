@@ -252,7 +252,7 @@ export default function ProfilePage() {
                 {(data?.games || []).map((g) => (
                   <div key={g.id} className="h-12 px-3 rounded-lg bg-[#0f1015] flex items-center gap-3 text-[12px]">
                     <span className={`w-16 font-bold ${g.win ? "text-[#2ecc71]" : "text-[#ff5c5c]"}`}>{g.win ? "Победа" : "Проигрыш"}</span>
-                    <span className="text-[#8e91a3] w-14">{(Number(g.chance) * 100).toFixed(1)}%</span>
+                    <span className="text-[#8e91a3] w-14">{(Number(g.display_chance ?? g.chance) * 100).toFixed(1)}%</span>
                     <span className="flex-1 min-w-0 truncate"><span className="text-[#7d8194]">Цель:</span> <span className="font-bold">{g.target?.name}</span></span>
                     <span className="font-bold flex items-center gap-1 w-28 justify-end">{formatMoney(Number(g.bet_amount) + Number(g.items_total || 0))} <RobuxIcon size={10} /></span>
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(g.created_at)}</span>
