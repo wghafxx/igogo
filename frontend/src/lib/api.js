@@ -87,6 +87,7 @@ export const adminApi = {
   bank: () => adminHttp.get(`/admin/bank`).then((r) => r.data),
   bankSettings: (payload) => adminHttp.put(`/admin/bank/settings`, payload).then((r) => r.data),
   bankAdjust: (amount, note) => adminHttp.post(`/admin/bank/adjust`, { amount, note }).then((r) => r.data),
+  poolTopup: (amount, note) => adminHttp.post(`/admin/bank/pool`, { amount, note }).then((r) => r.data),
   players: () => adminHttp.get(`/admin/players`).then((r) => r.data),
 };
 

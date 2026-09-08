@@ -182,6 +182,11 @@ class BankAdjustIn(InputModel):
     note: str = Field(min_length=2, max_length=200)
 
 
+class PoolTopUpIn(InputModel):
+    amount: float = Field(ge=0.01, le=1_000_000)
+    note: str = Field(min_length=2, max_length=200)
+
+
 class UidsIn(InputModel):
     uids: List[str] = Field(min_length=1, max_length=200)
 
@@ -391,10 +396,12 @@ async def take_skins(user: dict, uids: List[str], credit: bool = False) -> List[
 
 
 # ---------- Casino bank ----------
-# House edge model (classic upgraders): shown chance = bet/price * RTP (default edge 15%). The roll is honest, nothing is cancelled.
-# The only guard is solvency: a LARGE prize the bank cannot cover becomes a silent forced loss (player sees a normal loss, no refund, no message);
-# small prizes (<= 2% of the bank) are always paid even into negative headroom.
+# Payout model: shown chance = bet/price * RTP (default edge 15%). The roll is honest; the payout is gated by
+# the payout pool: every accepted bet refills pool += bet * rtp, a win spends pool -= prize. Hence total paid
+# never exceeds rtp * total wagered (hard RTP ceiling) plus explicit admin top-ups. Second guard is solvency:
+# a prize the bank cannot cover becomes a silent forced loss (player sees a normal loss, no message).
 BANK_DEFAULTS = {"rtp_target": 0.85}
+_rng = secrets.SystemRandom()
 MAX_PROMO_BONUS = 0.5
 _upgrade_lock = asyncio.Lock()
 _upgrade_seen: dict = {}
@@ -429,6 +436,35 @@ def max_bet_ratio(rtp: float) -> float:
 async def bank_settings() -> dict:
     doc = await db.bank_settings.find_one({"id": "main"}, {"_id": 0, "id": 0}) or {}
     return {**BANK_DEFAULTS, **doc}
+
+
+async def payout_pool() -> float:
+    """Accumulated refill budget: how much prize value is currently allowed to be paid out."""
+    doc = await db.bank_state.find_one({"id": "main"}, {"pool": 1, "_id": 0})
+    return float((doc or {}).get("pool") or 0)
+
+
+async def ensure_pool() -> float:
+    """Backfill the pool on first use: it equals rtp * wagered - paid (never negative), so historical
+    play keeps its allowance and the ceiling applies going forward."""
+    doc = await db.bank_state.find_one({"id": "main"}, {"pool": 1, "_id": 0})
+    if doc is not None and doc.get("pool") is not None:
+        return float(doc["pool"])
+    st = await rtp_stats()
+    rtp = float((await bank_settings())["rtp_target"])
+    start = max(0.0, st["wagered"] * rtp - st["paid"])
+    await db.bank_state.update_one(
+        {"id": "main", "pool": {"$exists": False}},
+        {"$set": {"pool": start}, "$setOnInsert": {"id": "main", "bank": 0.0}},
+        upsert=True,
+    )
+    if st["wagered"] > 0:
+        await db.bank_ledger.insert_one({
+            "id": str(uuid.uuid4()), "kind": "settings", "amount": 0.0, "bank_after": await bank_balance(),
+            "note": f"Инициализация пула выдачи: {start:.2f} RAP (RTP {round(rtp*100)}% × ставки − выдано)",
+            "created_at": now_utc(),
+        })
+    return start
 
 
 async def bank_balance() -> float:
@@ -479,13 +515,13 @@ async def solvency_headroom() -> tuple:
 
 
 def losing_roll(chance: float) -> float:
-    if random.random() < 0.3:
-        angle = chance * 180 + random.uniform(2, 10)
-        if random.random() < 0.5:
+    if _rng.random() < 0.3:
+        angle = chance * 180 + _rng.uniform(2, 10)
+        if _rng.random() < 0.5:
             angle = -angle
         return ((angle + 180) / 360) % 1.0
 
-    r = random.random() * (1 - chance)
+    r = _rng.random() * (1 - chance)
     half = 0.5 - chance / 2
     return r + chance if r >= half else r
 
@@ -1012,6 +1048,7 @@ async def admin_bank(request: Request):
     ]
     return {
         "bank": bank,
+        "pool": await payout_pool(),
         "settings": await bank_settings(),
         "liabilities": li,
         "net": bank - li["total"],
@@ -1093,6 +1130,20 @@ async def admin_bank_adjust(payload: BankAdjustIn, request: Request):
     else:
         bank = await bank_add("adjust", amount, note=payload.note.strip())
     return {"ok": True, "bank": bank}
+
+
+@api_router.post("/admin/bank/pool")
+async def admin_bank_pool(payload: PoolTopUpIn, request: Request):
+    await require_admin(request)
+    amount = round(payload.amount, 2)
+    await ensure_pool()
+    state = await db.bank_state.find_one_and_update(
+        {"id": "main"}, {"$inc": {"pool": amount}},
+        upsert=True, return_document=ReturnDocument.AFTER, projection={"_id": 0},
+    )
+    pool_after = float(state["pool"])
+    await db.bank_ledger.insert_one({"id": str(uuid.uuid4()), "kind": "pool", "amount": amount, "bank_after": await bank_balance(), "note": payload.note.strip(), "created_at": now_utc()})
+    return {"ok": True, "pool": pool_after}
 
 
 @api_router.get("/live-drops")
@@ -1217,8 +1268,13 @@ async def upgrade(payload: UpgradeIn, request: Request):
         raise HTTPException(status_code=400, detail="Недостаточно баланса или скин уже использован")
     new_balance = float(fresh.get("balance", 0))
 
+    # payout pool: every accepted bet refills the pool by bet * rtp; a win may only spend what the pool holds.
+    # Together with the atomic spend below this guarantees total paid <= rtp * total wagered (hard ceiling).
+    await ensure_pool()
+    await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": total_bet * rtp}}, upsert=True)
+
     # the roll itself is honest and independent of the bank; only the payout decision is serialized
-    roll = random.random()
+    roll = _rng.random()
     win = abs(roll * 360 - 180) < chance * 180
     forced_loss = False
     forced_reason = None
@@ -1235,8 +1291,19 @@ async def upgrade(payload: UpgradeIn, request: Request):
                 win, forced_loss, forced_reason = False, True, ("lock" if not lock.leased else "bank")
                 roll = losing_roll(chance)
             else:
-                target = {**shop_item, "uid": str(uuid.uuid4())}
-                await db.users.update_one({"session_id": payload.session_id}, {"$push": {"skins": target}})
+                # pool ceiling: pay the prize only while the pool still holds budget for it
+                paid_state = await db.bank_state.find_one_and_update(
+                    {"id": "main", "pool": {"$gte": target_price}},
+                    {"$inc": {"pool": -target_price}},
+                    return_document=ReturnDocument.AFTER,
+                )
+                if not paid_state:
+                    win, forced_loss, forced_reason = False, True, "pool"
+                    roll = losing_roll(chance)
+                else:
+                    protection["pool"] = float(paid_state["pool"])
+                    target = {**shop_item, "uid": str(uuid.uuid4())}
+                    await db.users.update_one({"session_id": payload.session_id}, {"$push": {"skins": target}})
     angle = landing_angle(roll, chance, win)
 
     writes = [db.upgrades.insert_one({

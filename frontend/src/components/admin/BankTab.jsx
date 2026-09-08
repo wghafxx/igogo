@@ -11,6 +11,7 @@ const KIND = {
   withdrawal: ["Вывод скина", "text-[#ff8a8a]"],
   adjust: ["Корректировка", "text-[#ffb000]"],
   settings: ["Настройка", "text-[#8e91a3]"],
+  pool: ["Пул выдачи", "text-[#4b9dff]"],
 };
 
 const Stat = ({ label, value, tone = "", testId, hint }) => (
@@ -104,6 +105,42 @@ const AdjustForm = ({ onDone }) => {
   );
 };
 
+const PoolForm = ({ onDone }) => {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    const v = Number(amount);
+    if (!v || v <= 0 || note.trim().length < 2) return;
+    setBusy(true);
+    try {
+      await adminApi.poolTopup(v, note.trim());
+      toast.success(`Пул выдачи пополнен на ${formatMoney(v)}`);
+      setAmount("");
+      setNote("");
+      onDone();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Ошибка");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="blox-panel p-4 space-y-2" data-testid="bank-pool-topup">
+      <div className="text-[13px] font-bold">Пополнить пул выдачи</div>
+      <div className="text-[11px] text-[#8e91a3]">Бюджет на выигрыши: приз платится, только если в пуле хватает средств. Стартовый пул = RTP × ставки − выдано; здесь можно добавить вручную (рекомендуется ≤ 20% банка).</div>
+      <div className="flex items-center gap-2 h-10 px-3 rounded-lg bg-[#0f1015]">
+        <RobuxIcon size={13} />
+        <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="Сумма RAP" className="flex-1 bg-transparent outline-none text-[13px] font-bold" data-testid="bank-pool-amount" />
+      </div>
+      <input value={note} onChange={(e) => setNote(e.target.value.slice(0, 200))} placeholder="Причина (обязательно)" className="w-full h-9 px-3 rounded-lg bg-[#0f1015] outline-none text-[12px]" data-testid="bank-pool-note" />
+      <button onClick={submit} disabled={busy || !Number(amount) || Number(amount) <= 0 || note.trim().length < 2} className="w-full h-9 rounded-lg bg-[#4b9dff] text-black font-bold text-[12px] disabled:opacity-40" data-testid="bank-pool-submit">
+        Пополнить пул
+      </button>
+    </div>
+  );
+};
+
 export default function BankTab({ refreshKey = 0 }) {
   const [data, setData] = useState(null);
   const load = useCallback(() => adminApi.bank().then(setData).catch(() => toast.error("Не удалось загрузить банк")), []);
@@ -115,7 +152,7 @@ export default function BankTab({ refreshKey = 0 }) {
 
   if (!data) return <div className="blox-panel h-[160px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="bank-loading">Загрузка…</div>;
 
-  const { bank, liabilities, net, rtp, games, settings, ledger } = data;
+  const { bank, pool, liabilities, net, rtp, games, settings, ledger } = data;
   const rtp24 = data.rtp_24h || null;
   const forcedTop = data.forced_top || [];
   const warnThreshold = 0.2 * (Number(liabilities?.total) || 0);
@@ -128,14 +165,15 @@ export default function BankTab({ refreshKey = 0 }) {
   return (
     <div className="space-y-4" data-testid="bank-tab">
       <div className={`rounded-lg px-3 py-2.5 text-[12px] leading-snug border ${bannerCls}`} data-testid="bank-status-banner">
-        <b>Шанс = ставка / цена × {Math.round(settings.rtp_target * 100)}%. Комиссия {Math.round((1 - settings.rtp_target) * 100)}%.</b> Текущая защита заменяет любой непокрытый выигрыш проигрышем без уведомления игрока. Это снижает фактический шанс относительно показанного. Красный — обязательства превышают банк; жёлтый — чистая позиция &lt; 20% обязательств.
+        <b>Шанс = ставка / цена × {Math.round(settings.rtp_target * 100)}%. Комиссия {Math.round((1 - settings.rtp_target) * 100)}%.</b> Выплаты ограничены пулом выдачи: суммарная выдача никогда не превысит RTP × все ставки. Если пул пуст, выигрыш по роллу тихо засчитывается как проигрыш. Красный — обязательства превышают банк; жёлтый — чистая позиция &lt; 20% обязательств.
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Банк (реальные скины)" value={<>{formatMoney(bank)} <RobuxIcon size={14} /></>} tone="text-[#ffb000]" testId="bank-balance" hint="Σ депозитов − Σ выданных скинов ± правки" />
         <Stat label="Обязательства игрокам" value={<>{formatMoney(liabilities.total)} <RobuxIcon size={14} /></>} testId="bank-liabilities" hint={`балансы ${formatMoney(liabilities.balances)} · инвентари ${formatMoney(liabilities.inventory)} · на выводе ${formatMoney(liabilities.pending_withdrawals)}`} />
         <Stat label="Чистая позиция (прибыль)" value={<>{net >= 0 ? "+" : ""}{formatMoney(net)} <RobuxIcon size={14} /></>} tone={health === "green" ? "text-[#2ecc71]" : health === "yellow" ? "text-[#ffb000]" : "text-[#ff5c5c]"} testId="bank-net" hint="банк − обязательства" />
-        <Stat label="Фактический RTP" value={pct(rtp.rtp)} tone={rtp.rtp <= settings.rtp_target + 0.05 ? "text-[#2ecc71]" : "text-[#ffb000]"} testId="bank-rtp-actual" hint={`цель ${Math.round(settings.rtp_target * 100)}% (сходится на большом числе игр) · поставлено ${formatMoney(rtp.wagered)} · выдано ${formatMoney(rtp.paid)}`} />
+        <Stat label="Фактический RTP" value={pct(rtp.rtp)} tone={rtp.rtp <= settings.rtp_target + 0.05 ? "text-[#2ecc71]" : "text-[#ffb000]"} testId="bank-rtp-actual" hint={`потолок ${Math.round(settings.rtp_target * 100)}% — выше подняться не может · поставлено ${formatMoney(rtp.wagered)} · выдано ${formatMoney(rtp.paid)}`} />
+        <Stat label="Пул выдачи" value={<>{formatMoney(pool ?? 0)} <RobuxIcon size={14} /></>} tone={(pool ?? 0) > 0 ? "text-[#4b9dff]" : "text-[#ff5c5c]"} testId="bank-pool" hint={(pool ?? 0) <= 0 ? "пуст — выигрыши временно не выплачиваются" : "доступный бюджет на выигрыши: пополняется ставками × RTP"} />
         <Stat label="RTP за 24ч" value={pct(rtp24 ? rtp24.rtp : 0)} tone={!rtp24 || rtp24.rtp <= settings.rtp_target + 0.05 ? "text-[#2ecc71]" : "text-[#ffb000]"} testId="bank-rtp-24h" hint={rtp24 ? `поставлено ${formatMoney(rtp24.wagered)} · выдано ${formatMoney(rtp24.paid)}` : "нет данных"} />
       </div>
 
@@ -143,7 +181,7 @@ export default function BankTab({ refreshKey = 0 }) {
         <Stat label="Всего задепозитили" value={<>{formatMoney(data.deposits_total)} <RobuxIcon size={12} /></>} testId="bank-deposits-total" />
         <Stat label="Всего выведено скинов" value={<>{formatMoney(data.withdrawals_total)} <RobuxIcon size={12} /></>} testId="bank-withdrawals-total" />
         <Stat label="Игр / побед" value={`${games.total} / ${games.wins}`} testId="bank-games" />
-        <Stat label="Принудительных проигрышей" value={games.forced_losses} tone="text-[#ff8a8a]" testId="bank-forced-losses" hint={`${games.forced_by?.bank || 0} нехватка банка · ${games.forced_by?.lock || 0} блокировка · ${(games.forced_by?.player || 0) + (games.forced_by?.rtp || 0)} прежние правила`} />
+        <Stat label="Принудительных проигрышей" value={games.forced_losses} tone="text-[#ff8a8a]" testId="bank-forced-losses" hint={`${games.forced_by?.bank || 0} нехватка банка · ${games.forced_by?.lock || 0} блокировка · ${games.forced_by?.pool || 0} пустой пул · ${(games.forced_by?.player || 0) + (games.forced_by?.rtp || 0)} прежние правила`} />
       </div>
 
       <div className="blox-panel p-4" data-testid="bank-forced-top">
@@ -164,6 +202,10 @@ export default function BankTab({ refreshKey = 0 }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <RtpControl settings={settings} onSaved={load} />
+        <PoolForm onDone={load} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <AdjustForm onDone={load} />
       </div>
 
