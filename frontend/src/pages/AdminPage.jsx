@@ -272,7 +272,7 @@ export default function AdminPage() {
               ["withdrawals", "Выводы скинов"],
               ["bank", "Банк"],
               ["players", "Игроки"],
-              ["rain", "Дождь"],
+              ["rain", "Удача"],
             ].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`admin-tab-${k}`}>
                 {label}

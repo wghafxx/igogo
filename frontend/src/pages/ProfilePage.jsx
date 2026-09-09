@@ -35,7 +35,7 @@ const Stat = ({ title, icon: Icon, children, testId }) => (
   </div>
 );
 
-const KIND = { won: "Выигран", sold: "Продан", withdrawn: "Выведен", withdraw_requested: "На выводе", deposited: "Депозит", rain: "Дождь" };
+const KIND = { won: "Выигран", sold: "Продан", withdrawn: "Выведен", withdraw_requested: "На выводе", deposited: "Депозит" };
 
 const InventoryCard = ({ item, active, onToggle, onSell, onWithdraw, busy }) => (
   <div className={`inv-card ${active ? "active" : ""}`} style={{ "--rarity": rarityColor(item.rarity) }} data-testid="inventory-item">
@@ -251,7 +251,7 @@ export default function ProfilePage() {
                 {(data?.games || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">Игр пока нет</div>}
                 {(data?.games || []).map((g) => (
                   <div key={g.id} className="h-12 px-3 rounded-lg bg-[#0f1015] flex items-center gap-3 text-[12px]">
-                    <span className={`w-16 font-bold ${g.win ? "text-[#2ecc71]" : Number(g.rain_bonus) > 0 ? "text-[#00a2ff]" : "text-[#ff5c5c]"}`}>{g.win ? "Победа" : Number(g.rain_bonus) > 0 ? "Дождь" : "Проигрыш"}</span>
+                    <span className={`w-16 font-bold ${g.win ? "text-[#2ecc71]" : "text-[#ff5c5c]"}`}>{g.win ? "Победа" : "Проигрыш"}</span>
                     <span className="text-[#8e91a3] w-14">{(Number(g.display_chance ?? g.chance) * 100).toFixed(1)}%</span>
                     <span className="flex-1 min-w-0 truncate"><span className="text-[#7d8194]">Цель:</span> <span className="font-bold">{g.target?.name}</span></span>
                     <span className="font-bold flex items-center gap-1 w-28 justify-end">{formatMoney(Number(g.bet_amount) + Number(g.items_total || 0))} <RobuxIcon size={10} /></span>

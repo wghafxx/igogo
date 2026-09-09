@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Outlet, Link } from "react-router-dom";
-import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 import Header from "./components/Header";
 import LiveDrop, { LiveDropStrip } from "./components/LiveDrop";
 import UpgradePanel from "./components/UpgradePanel";
-import RainBanner from "./components/RainBanner";
 import SkinsSection from "./components/SkinsSection";
 import SettingsModal from "./components/SettingsModal";
 import { Logo } from "./components/Logo";
@@ -75,7 +73,6 @@ const Home = () => {
     refreshUser();
     setBetSkins([]);
     if (res.win) setTarget(null);
-    if (Number(res.rain_bonus) > 0) toast.success(`Дождь: +${Number(res.rain_bonus).toFixed(2)} RAP к балансу`);
   };
 
   return (
@@ -84,7 +81,6 @@ const Home = () => {
         <Logo size={34} className="sm:w-[38px] sm:h-[38px]" />
         <h1 className="text-[24px] sm:text-[30px] font-black uppercase tracking-wide">BLOXGRADE</h1>
       </div>
-      <RainBanner />
       <UpgradePanel
         key={sessionId}
         sessionId={sessionId}

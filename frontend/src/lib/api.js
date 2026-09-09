@@ -42,7 +42,6 @@ export const api = {
   liveDrops: (limit = 30) => http.get(`/live-drops`, { params: { limit } }).then((r) => r.data),
   shop: (params) => http.get(`/shop`, { params }).then((r) => r.data),
   upgrade: (payload) => http.post(`/upgrade`, payload).then((r) => r.data),
-  rainStatus: () => http.get(`/rain/status`).then((r) => r.data),
   depositInfo: () => http.get(`/deposit/info`).then((r) => r.data),
   applyPromo: (code) => http.post(`/promo/apply`, { code }).then((r) => r.data),
   profile: () => http.get(`/profile`).then((r) => r.data),

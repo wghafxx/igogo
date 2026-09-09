@@ -182,7 +182,7 @@ class RainSettingsIn(InputModel):
     pool_threshold: Optional[float] = Field(default=None, ge=100, le=100000)
     budget_min_pct: Optional[float] = Field(default=None, ge=0.05, le=0.5)
     budget_max_pct: Optional[float] = Field(default=None, ge=0.05, le=0.5)
-    min_bet: Optional[float] = Field(default=None, ge=1, le=1000)
+    max_single_pct: Optional[float] = Field(default=None, ge=0.1, le=0.9)
     timeout_min: Optional[int] = Field(default=None, ge=10, le=360)
 
 
@@ -236,9 +236,6 @@ class UpgradeOut(BaseModel):
     angle: float
     balance: float
     upgrades_total: int
-    # Rain-добивка: кусок RAP, упавший этим проигрышным прокрутом (0 если не было).
-    rain_bonus: float = 0.0
-    rain_id: Optional[str] = None
 
 
 # ---------- Helpers ----------
@@ -457,21 +454,21 @@ def max_bet_ratio(rtp: float) -> float:
     return min(1.0, MAX_CHANCE / rtp)
 
 
-# ---------- Rain (раздача пула по заполнению, а не по времени) ----------
-# Триггер — свободный pool >= threshold. Бюджет — случайные 20-30% pool,
-# режется на 4 куска по случайной схеме из 6 + шаффл. Следующие 4 прокрута
-# от 4 РАЗНЫХ аккаунтов (ставка >= min_bet), которые закончились проигрышем,
-# получают свой кусок RAP на баланс. Один акк = один кусок. Непогашенные
-# куски по таймауту возвращаются в pool. Обычные победы идут из остатка pool
-# и не трогают зарезервированный бюджет.
-from rain_math import RAIN_SCHEMES, pick_scheme, split_budget
-
+# ---------- Luck (секретная полоса удачи по заполнению пула) ----------
+# СЕКРЕТНО: игрокам ничего не показывается — ни баннеров, ни бонусов, ни истории.
+# Триггер — свободный pool >= threshold. Резервируется случайные 20-30% pool.
+# Пока резерв не кончился: прокруты судятся по ПОКАЗЫВАЕМОМУ шансу (bet/price
+# без RTP — ровно та цифра, что видит игрок), а призы списываются из резерва,
+# а не из общего пула. Один приз — не больше 60% ОСТАТКА резерва (иначе один
+# жирный приз съест всю полосу; такой спин идёт по обычным правилам).
+# Обычные проверки банка остаются: чем платить нет — победа не выдаётся.
+# Непотраченный остаток по таймауту возвращается в pool.
 RAIN_DEFAULTS = {
     "enabled": True,
     "pool_threshold": 4000.0,
     "budget_min_pct": 0.20,
     "budget_max_pct": 0.30,
-    "min_bet": 20.0,
+    "max_single_pct": 0.60,
     "timeout_min": 60,
 }
 
@@ -486,7 +483,7 @@ async def rain_active() -> Optional[dict]:
 
 
 async def rain_maybe_start() -> Optional[dict]:
-    """Пытается открыть раздачу, если pool полон. Возвращает активную раздачу или None.
+    """Пытается открыть полосу удачи, если pool полон. Возвращает активную или None.
 
     Бронь бюджета атомарна (pool -= budget только если pool >= budget),
     поэтому одновременные спины не могут зарезервировать одно и то же дважды.
@@ -503,7 +500,7 @@ async def rain_maybe_start() -> Optional[dict]:
         return None
     pct = _rng.uniform(float(cfg["budget_min_pct"]), float(cfg["budget_max_pct"]))
     budget = round(pool * pct, 2)
-    if budget < 0.04:  # меньше 4 копеек на 4 куска — не стартуем
+    if budget < 1.0:
         return None
     reserved = await db.bank_state.find_one_and_update(
         {"id": "main", "pool": {"$gte": budget}},
@@ -513,19 +510,15 @@ async def rain_maybe_start() -> Optional[dict]:
     )
     if not reserved:
         return await rain_active()  # гонку выиграл чужой спин/победа — пул уже меньше
-    shares = pick_scheme(_rng)
-    amounts = split_budget(budget, shares)
     now = now_utc()
     rain = {
         "id": str(uuid.uuid4()),
+        "v": 2,
         "status": "active",
-        "scheme": shares,
         "budget": budget,
-        "slices": [
-            {"amount": a, "session_id": None, "upgrade_id": None, "claimed_at": None}
-            for a in amounts
-        ],
-        "claimed_sessions": [],
+        "left": budget,
+        "spent": 0.0,
+        "wins": [],
         "created_at": now,
         "closes_at": now + timedelta(minutes=int(cfg["timeout_min"])),
         "closed_at": None,
@@ -534,24 +527,35 @@ async def rain_maybe_start() -> Optional[dict]:
     try:
         await db.rains.insert_one(rain)
     except DuplicateKeyError:
-        # Крайне редкая гонка: два спина одновременно прошли бронь и создали раздачи.
+        # Крайне редкая гонка: два спина одновременно прошли бронь и создали полосы.
         # Откатываем свою бронь обратно в pool — прибыль не теряем.
         await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": budget}})
         return await rain_active()
-    await db.bank_ledger.insert_one({
-        "id": str(uuid.uuid4()), "kind": "rain_start", "amount": 0.0,
-        "bank_after": await bank_balance(),
-        "note": f"Раздача {rain['id'][:8]}: резерв {budget:.2f} RAP (схема {'/'.join(map(str, shares))})",
-        "ref_id": rain["id"], "created_at": now_utc(),
-    })
     out = dict(rain)
     out.pop("_id", None)
     return out
 
 
 async def rain_maybe_close() -> Optional[dict]:
-    """Ленивое закрытие просроченной раздачи: невостребованное возвращается в pool. Только один воркер."""
+    """Ленивое закрытие: просрочка — возврат остатка в pool; legacy-документы
+    старого формата (куски) мигрируются сразу. Только один воркер."""
     now = now_utc()
+    # Сначала legacy-формат (v1 с кусками): закрываем вне зависимости от таймаута.
+    legacy = await db.rains.find_one_and_update(
+        {"status": "active", "slices": {"$exists": True}},
+        {"$set": {"status": "closed", "closed_at": now}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0},
+    )
+    if legacy is not None:
+        unclaimed = round(sum(
+            float(s.get("amount") or 0)
+            for s in legacy.get("slices", []) if not s.get("session_id")
+        ), 2)
+        if unclaimed > 0:
+            await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": unclaimed}}, upsert=True)
+        await db.rains.update_one({"id": legacy["id"]}, {"$set": {"returned_amount": unclaimed}})
+        return {**legacy, "returned_amount": unclaimed}
     doc = await db.rains.find_one_and_update(
         {"status": "active", "closes_at": {"$lte": now}},
         {"$set": {"status": "closed", "closed_at": now}},
@@ -560,82 +564,56 @@ async def rain_maybe_close() -> Optional[dict]:
     )
     if not doc:
         return None
-    unclaimed = round(sum(s["amount"] for s in doc.get("slices", []) if not s.get("session_id")), 2)
-    if unclaimed > 0:
-        await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": unclaimed}}, upsert=True)
-        await db.bank_ledger.insert_one({
-            "id": str(uuid.uuid4()), "kind": "rain_return", "amount": 0.0,
-            "bank_after": await bank_balance(),
-            "note": f"Раздача {doc['id'][:8]} закрыта по таймауту: возврат {unclaimed:.2f} RAP в пул",
-            "ref_id": doc["id"], "created_at": now_utc(),
-        })
-    await db.rains.update_one({"id": doc["id"]}, {"$set": {"returned_amount": unclaimed}})
-    doc["returned_amount"] = unclaimed
+    left = round(float(doc.get("left") or 0), 2)
+    if left > 0:
+        await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": left}}, upsert=True)
+    await db.rains.update_one({"id": doc["id"]}, {"$set": {"returned_amount": left}})
+    doc["returned_amount"] = left
     return doc
 
 
-async def rain_claim(session_id: str, upgrade_id: str, total_bet: float) -> Optional[dict]:
-    """Выдаёт случайный невостребованный кусок текущей раздачи этому спину.
+async def luck_boosted(rain: Optional[dict], target_price: float) -> bool:
+    """Можно ли этот спин судить по показываемому шансу (без RTP).
 
-    Возвращает {'rain_id', 'amount'} или None. Деньги уже зарезервированы
-    при старте, здесь только: атомарно занять кусок + начислить баланс.
-    Один session_id — один кусок (проверяется атомарно в фильтре).
+    Да, если полоса активна и приз влезет в 60% остатка резерва.
+    Жирный приз сверх лимита идёт по обычным правилам — полосу не жрёт один.
     """
-    cfg = await rain_settings()
+    if not rain or rain.get("status") != "active":
+        return False
+    if "slices" in rain:  # legacy-документ — не используем
+        return False
+    try:
+        cfg = await rain_settings()
+    except Exception:
+        return False
     if not cfg.get("enabled"):
-        return None
-    if total_bet < float(cfg["min_bet"]) - 1e-9:
-        return None
-    rain = await rain_active()
-    if not rain:
-        return None
-    # Платежеспособность: rain растит обязательства (баланс), банк должен покрывать.
-    # Нет покрытия — кусок не трогаем, оставляем следующему игроку.
-    headroom, _ = await solvency_headroom()
-    # Сначала выбираем случайный свободный индекс, затем атомарно занимаем именно его.
-    # При гонке (индекс уже занят) пробуем другой — всего не более числа кусков.
-    order = list(range(len(rain.get("slices", []))))
-    _rng.shuffle(order)
-    now = now_utc()
-    for i in order:
-        if rain["slices"][i].get("session_id"):
-            continue
-        amount = float(rain["slices"][i]["amount"])
-        if amount <= 0:
-            continue
-        if headroom + 1e-9 < amount:
-            continue
-        claimed = await db.rains.find_one_and_update(
-            {
-                "id": rain["id"], "status": "active",
-                f"slices.{i}.session_id": None,
-                "claimed_sessions": {"$ne": session_id},
-            },
-            {"$set": {
-                f"slices.{i}.session_id": session_id,
-                f"slices.{i}.upgrade_id": upgrade_id,
-                f"slices.{i}.claimed_at": now,
-            }, "$push": {"claimed_sessions": session_id}},
-            return_document=ReturnDocument.AFTER,
-            projection={"_id": 0},
+        return False
+    left = float(rain.get("left") or 0)
+    if left <= 0 or target_price <= 0:
+        return False
+    return target_price <= left * float(cfg.get("max_single_pct", 0.6)) + 1e-9
+
+
+async def luck_spend(rain_id: str, prize: float, session_id: str, upgrade_id: str) -> bool:
+    """Атомарно списывает приз из резерва полосы. True — оплачено из резерва."""
+    if prize <= 0:
+        return False
+    updated = await db.rains.find_one_and_update(
+        {"id": rain_id, "status": "active", "left": {"$gte": prize}},
+        {"$inc": {"left": -prize, "spent": prize},
+         "$push": {"wins": {"session_id": session_id, "upgrade_id": upgrade_id,
+                             "prize": prize, "at": now_utc()}}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0, "left": 1},
+    )
+    if not updated:
+        return False
+    if float(updated.get("left") or 0) <= 0:
+        await db.rains.update_one(
+            {"id": rain_id, "status": "active"},
+            {"$set": {"status": "closed", "closed_at": now_utc()}},
         )
-        if not claimed:
-            continue  # гонка — пробуем другой кусок
-        await db.users.update_one({"session_id": session_id}, {"$inc": {"balance": amount}})
-        await db.bank_ledger.insert_one({
-            "id": str(uuid.uuid4()), "kind": "rain", "amount": 0.0,
-            "bank_after": await bank_balance(),
-            "note": f"Раздача {rain['id'][:8]}: {amount:.2f} RAP → {session_id[:6]}…",
-            "ref_id": rain["id"], "session_id": session_id, "created_at": now_utc(),
-        })
-        left = sum(1 for s in claimed.get("slices", []) if not s.get("session_id"))
-        if left == 0:
-            await db.rains.update_one(
-                {"id": rain["id"], "status": "active"},
-                {"$set": {"status": "closed", "closed_at": now_utc()}},
-            )
-        return {"rain_id": rain["id"], "amount": amount}
-    return None
+    return True
 
 
 async def bank_settings() -> dict:
@@ -997,7 +975,6 @@ async def profile(request: Request):
                 "items_total": u.get("items_total", 0),
                 "chance": u.get("display_chance", u.get("chance")),
                 "display_chance": u.get("display_chance", u.get("chance")),
-                "rain_bonus": float(u.get("rain_bonus") or 0),
                 "win": u.get("win"),
                 "target": u.get("target_item"),
             }
@@ -1368,28 +1345,7 @@ async def live_drops(limit: int = 30):
     return out
 
 
-# ---------- Rain: публичный статус + админка ----------
-@api_router.get("/rain/status")
-async def rain_status():
-    """Публично: активна ли раздача, сколько кусков осталось и какие суммы (для азарта)."""
-    rain = await rain_active()
-    cfg = await rain_settings()
-    if not rain:
-        return {"active": False, "pool": await payout_pool(), "threshold": float(cfg["pool_threshold"])}
-    left = sorted(
-        [float(s["amount"]) for s in rain.get("slices", []) if not s.get("session_id")],
-        reverse=True,
-    )
-    return {
-        "active": True,
-        "rain_id": rain["id"],
-        "remaining": len(left),
-        "amounts": left,
-        "closes_at": rain.get("closes_at"),
-        "min_bet": float(cfg["min_bet"]),
-    }
-
-
+# ---------- Luck: админка (игрокам ничего не видно) ----------
 @api_router.get("/admin/rains")
 async def admin_rains(request: Request, limit: int = 20):
     await require_admin(request)
@@ -1559,15 +1515,29 @@ async def upgrade(payload: UpgradeIn, request: Request):
     await db.bank_state.update_one({"id": "main"}, {"$inc": {"pool": total_bet * rtp}}, upsert=True)
 
     # the roll itself is honest and independent of the bank; only the payout decision is serialized
-    # `chance` — реальный шанс победы (с RTP), `shown` — только цифра для UI (без RTP).
+    # `chance` — реальный шанс победы (с RTP), `shown` — цифра для UI (без RTP).
     shown = shown_chance(total_bet, target_price)
+    # Luck (секретно): если полоса удачи активна и приз влезает в 60% её остатка —
+    # судим спин по показываемому шансу (без RTP): игрок видит 50% и реально имеет 50%.
+    luck_rain = None
+    luck = False
+    try:
+        await rain_maybe_close()
+        luck_rain = await rain_maybe_start()
+        if luck_rain is None:
+            luck_rain = await rain_active()
+        luck = await luck_boosted(luck_rain, target_price)
+    except Exception:
+        logger.exception("luck check error (spin continues normal)")
+        luck_rain, luck = None, False
     roll = _rng.random()
-    win = abs(roll * 360 - 180) < chance * 180
+    win = abs(roll * 360 - 180) < (shown if luck else chance) * 180
     forced_loss = False
     forced_reason = None
     protection: dict = {"rtp": rtp}
     target = None
     upgrade_id = str(uuid.uuid4())
+    luck_used = False
     if win:
         async with bank_lock() as lock:
             # solvency: the bank must cover every player liability plus this prize — otherwise the spin is a loss
@@ -1578,42 +1548,36 @@ async def upgrade(payload: UpgradeIn, request: Request):
                 win, forced_loss, forced_reason = False, True, ("lock" if not lock.leased else "bank")
                 roll = losing_roll(shown)
             else:
-                # pool ceiling: pay the prize only while the pool still holds budget for it
-                paid_state = await db.bank_state.find_one_and_update(
-                    {"id": "main", "pool": {"$gte": target_price}},
-                    {"$inc": {"pool": -target_price}},
-                    return_document=ReturnDocument.AFTER,
-                )
-                if not paid_state:
-                    win, forced_loss, forced_reason = False, True, "pool"
-                    roll = losing_roll(shown)
-                else:
-                    protection["pool"] = float(paid_state["pool"])
+                if luck and luck_rain is not None:
+                    # Приз оплачивается из резерва полосы (уже выведен из pool при старте).
+                    try:
+                        luck_used = await luck_spend(luck_rain["id"], target_price, payload.session_id, upgrade_id)
+                    except Exception:
+                        logger.exception("luck spend error (fallback to pool)")
+                        luck_used = False
+                if luck_used:
+                    protection["luck"] = True
                     target = {**shop_item, "uid": str(uuid.uuid4())}
                     await db.users.update_one({"session_id": payload.session_id}, {"$push": {"skins": target}})
-    # Угол считается от показываемой зоны, чтобы проигрыш никогда визуально не падал в зелёную зону.
-    # Победа при этом всегда внутри и реальной зоны (shown >= chance при RTP<=1).
-    angle = landing_angle(roll, shown, win)
-
-    # ---------- Rain: раздача по заполнению пула (не по времени) ----------
-    # Только для проигрышных спинов: слив превращается в добивку RAP-куском.
-    # Выигрышные спины куски не тратят. Бюджет уже зарезервирован при старте,
-    # здесь лишь занимаем кусок + начисляем баланс. Один session = один кусок.
-    rain_bonus = 0.0
-    rain_id = None
-    try:
-        await rain_maybe_close()  # лениво: просрочка возвращается в pool
-        await rain_maybe_start()  # pool полон -> открыть новую (атомарная бронь)
-        if not win:
-            claimed = await rain_claim(payload.session_id, upgrade_id, total_bet)
-            if claimed:
-                rain_bonus = float(claimed["amount"])
-                rain_id = claimed["rain_id"]
-                new_balance = round(new_balance + rain_bonus, 2)
-    except Exception:
-        # Rain никогда не должен ронять прокрут: ошибка = просто нет добивки.
-        logger.exception("rain error (spin continues without bonus)")
-        rain_bonus, rain_id = 0.0, None
+                else:
+                    # обычный путь: приз платится из общего пула при наличии бюджета
+                    paid_state = await db.bank_state.find_one_and_update(
+                        {"id": "main", "pool": {"$gte": target_price}},
+                        {"$inc": {"pool": -target_price}},
+                        return_document=ReturnDocument.AFTER,
+                    )
+                    if not paid_state:
+                        win, forced_loss, forced_reason = False, True, "pool"
+                        roll = losing_roll(shown)
+                    else:
+                        protection["pool"] = float(paid_state["pool"])
+                        target = {**shop_item, "uid": str(uuid.uuid4())}
+                        await db.users.update_one({"session_id": payload.session_id}, {"$push": {"skins": target}})
+    # Угол: победа — всегда внутри РЕАЛЬНОЙ зоны (тесты и честность стрелки),
+    # проигрыш — всегда снаружи ПОКАЗЫВАЕМОЙ. Подкрученная победа (ролл между
+    # реальной и показываемой зонами) подтягивается к краю реальной зоны —
+    # визуально всё равно внутри зелёного, игрок ничего не замечает.
+    angle = landing_angle(roll, chance, True) if win else landing_angle(roll, shown, False)
 
     writes = [db.upgrades.insert_one({
         "id": upgrade_id,
@@ -1629,8 +1593,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         "forced_loss": forced_loss,
         "forced_reason": forced_reason if forced_loss else None,
         "protection": protection,
-        "rain_bonus": rain_bonus,
-        "rain_id": rain_id,
+        "luck": bool(luck_used),
         "created_at": now_utc(),
     })]
     if win:
@@ -1652,10 +1615,6 @@ async def upgrade(payload: UpgradeIn, request: Request):
         writes.append(db.item_history.insert_one(
             {"id": str(uuid.uuid4()), "session_id": payload.session_id, "kind": "won", "item": target, "price": float(shop_item.get("price") or 0), "created_at": now_utc()}
         ))
-    if rain_bonus > 0:
-        writes.append(db.item_history.insert_one(
-            {"id": str(uuid.uuid4()), "session_id": payload.session_id, "kind": "rain", "item": None, "price": rain_bonus, "rain_id": rain_id, "created_at": now_utc()}
-        ))
     await asyncio.gather(*writes)
     upgrades_total = await count_upgrades()
 
@@ -1668,8 +1627,6 @@ async def upgrade(payload: UpgradeIn, request: Request):
         angle=angle,
         balance=new_balance,
         upgrades_total=upgrades_total,
-        rain_bonus=rain_bonus,
-        rain_id=rain_id,
     )
 
 
