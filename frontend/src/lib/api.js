@@ -42,6 +42,7 @@ export const api = {
   liveDrops: (limit = 30) => http.get(`/live-drops`, { params: { limit } }).then((r) => r.data),
   shop: (params) => http.get(`/shop`, { params }).then((r) => r.data),
   upgrade: (payload) => http.post(`/upgrade`, payload).then((r) => r.data),
+  rainStatus: () => http.get(`/rain/status`).then((r) => r.data),
   depositInfo: () => http.get(`/deposit/info`).then((r) => r.data),
   applyPromo: (code) => http.post(`/promo/apply`, { code }).then((r) => r.data),
   profile: () => http.get(`/profile`).then((r) => r.data),
@@ -89,6 +90,10 @@ export const adminApi = {
   bankAdjust: (amount, note) => adminHttp.post(`/admin/bank/adjust`, { amount, note }).then((r) => r.data),
   poolTopup: (amount, note) => adminHttp.post(`/admin/bank/pool`, { amount, note }).then((r) => r.data),
   players: () => adminHttp.get(`/admin/players`).then((r) => r.data),
+  rains: (limit = 20) => adminHttp.get(`/admin/rains`, { params: { limit } }).then((r) => r.data),
+  rainSettings: () => adminHttp.get(`/admin/rain/settings`).then((r) => r.data),
+  saveRainSettings: (payload) => adminHttp.put(`/admin/rain/settings`, payload).then((r) => r.data),
+  rainClose: () => adminHttp.post(`/admin/rain/close`).then((r) => r.data),
 };
 
 export const DEPOSIT_FEE = 0.2;

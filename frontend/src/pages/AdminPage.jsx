@@ -9,6 +9,7 @@ import { ExternalLinkIcon } from "../components/icons/external-link";
 import { adminApi, getAdminToken, setAdminToken, formatMoney, DEPOSIT_FEE } from "../lib/api";
 import BankTab from "../components/admin/BankTab";
 import PlayersTab from "../components/admin/PlayersTab";
+import RainTab from "../components/admin/RainTab";
 import { DepositAllocationPreview } from "../components/admin/DepositAllocationPreview";
 import { DepositReceipt } from "../components/DepositReceipt";
 
@@ -271,6 +272,7 @@ export default function AdminPage() {
               ["withdrawals", "Выводы скинов"],
               ["bank", "Банк"],
               ["players", "Игроки"],
+              ["rain", "Дождь"],
             ].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`admin-tab-${k}`}>
                 {label}
@@ -288,8 +290,9 @@ export default function AdminPage() {
 
         {tab === "bank" && <BankTab refreshKey={refreshKey} />}
         {tab === "players" && <PlayersTab refreshKey={refreshKey} />}
+        {tab === "rain" && <RainTab refreshKey={refreshKey} />}
 
-        {tab !== "bank" && tab !== "players" && (
+        {tab !== "bank" && tab !== "players" && tab !== "rain" && (
         <div className="space-y-3" data-testid="admin-list">
           {rows.length === 0 && <div className="blox-panel h-[160px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="admin-empty">Пусто</div>}
 
