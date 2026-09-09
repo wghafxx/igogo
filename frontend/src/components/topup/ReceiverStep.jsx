@@ -12,7 +12,7 @@ import { calcCredit } from "./AmountStep";
 const STEPS = [
   "Добавьте наш аккаунт в друзья и дождитесь принятия заявки.",
   "Зайдите в игру, откройте Trade Plaza и выберите наш ник в списке друзей.",
-  "Положите в трейд свои скины (каждый от 20 RAP) и отправьте — ничего не просите взамен.",
+  "Положите в трейд свои скины (каждый от 35 RAP) и отправьте — ничего не просите взамен.",
   "Впишите ниже названия скинов и нажмите «Подтвердить».",
 ];
 
@@ -77,7 +77,7 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
 
       <div className="rounded-lg bg-[#ff5c5c]/10 border border-[#ff5c5c]/40 px-3 py-2 flex items-start gap-2 text-[11px] text-[#ff9b9b] leading-snug" data-testid="topup-warning">
         <BadgeAlertIcon size={14} className="shrink-0 mt-0.5" />
-        <span>Скины дешевле 20 RAP не зачисляются. Отправляйте трейд только с аккаунта, привязанного ниже — иначе мы не поймём, кому начислять.</span>
+        <span>Скины дешевле 35 RAP не зачисляются. Отправляйте трейд только с аккаунта, привязанного ниже — иначе мы не поймём, кому начислять. <b>Без оранжевого значка, цена будет равноценна графику продаж! Сверяйте график продаж.</b></span>
       </div>
 
       <div className="rounded-xl bg-[#0f1015] p-3 space-y-2" data-testid="topup-roblox-block">

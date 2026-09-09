@@ -67,7 +67,7 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
   const [result, setResult] = useState(null);
   const [lockedChance, setLockedChance] = useState(null);
   const settleUntil = useRef(0);
-  const { rotation, spinning, fast, busyRef, runSpin, finishSpin } = useUpgradeSpin({
+  const { rotation, spinning, fast, cashback, busyRef, runSpin, finishSpin } = useUpgradeSpin({
     settings, onUpgraded, onSpinningChange, onChance: setLockedChance,
     onResult: (value) => {
       if (value) settleUntil.current = Date.now() + 1500;
@@ -175,7 +175,7 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
         </div>
 
         <div className="col-span-2 lg:col-span-1 flex items-center justify-center order-1 lg:order-none">
-          <Gauge chance={lockedChance ?? effectiveChance} rotation={rotation} spinning={spinning} fast={fast} result={result} onSpinEnd={finishSpin} />
+          <Gauge chance={lockedChance ?? effectiveChance} rotation={rotation} spinning={spinning} fast={fast} result={result} cashback={cashback} onSpinEnd={finishSpin} />
         </div>
 
         <div className="blox-panel relative overflow-hidden h-[230px] sm:h-[300px] px-3 sm:px-4 pt-4 sm:pt-5 pb-3 sm:pb-4 flex flex-col order-3 lg:order-none" data-testid="target-panel">

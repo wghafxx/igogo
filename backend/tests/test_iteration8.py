@@ -81,7 +81,7 @@ class TestDepositInfo:
         assert r.status_code == 200
         d = r.json()
         assert d["cooldown"] == 60
-        assert d["min_rap"] == 20
+        assert d["min_rap"] == 35
         assert d["fee"] == 0.2
         recs = d["receivers"]
         assert isinstance(recs, list) and len(recs) >= 1

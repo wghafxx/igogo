@@ -128,7 +128,7 @@ export default function TopUpModal({ open, onOpenChange }) {
             </button>
           </div>
 
-          {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 20} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
+          {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 35} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
           {tab === "skins" && step === "receiver" && (
             <ReceiverStep
               receivers={info?.receivers || []}

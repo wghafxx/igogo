@@ -75,7 +75,7 @@ class TestPromoAndDeposit:
         assert r.status_code == 200, r.text
         d = r.json()
         assert d["friend_url"].startswith("https://www.roblox.com/share?code=114adf7ac7b01243b752faf7c6c71b28")
-        assert d["min_rap"] == 20
+        assert d["min_rap"] == 35
         assert abs(d["fee"] - 0.20) < 1e-9
 
     def test_promo_requires_auth(self, anon):

@@ -25,7 +25,7 @@ const edge = (deg) => {
 };
 
 // Static wheel: the win-strip sits at the bottom; the pointer starts at the bottom and spins.
-export default function Gauge({ chance, rotation, spinning, fast, result, onSpinEnd }) {
+export default function Gauge({ chance, rotation, spinning, fast, result, cashback, onSpinEnd }) {
   const half = Math.min(chance * 180, 179.9);
   const zoneFrom = 180 - half;
   const zoneTo = 180 + half;
@@ -122,7 +122,7 @@ export default function Gauge({ chance, rotation, spinning, fast, result, onSpin
           {(chance * 100).toFixed(2)}%
         </div>
         <div className="text-[12px] text-[#7d8194] mt-1.5" data-testid="gauge-label">
-          {spinning ? "крутим..." : result === "win" ? "победа!" : result === "lose" ? "не повезло" : chanceLabel}
+          {spinning ? "крутим..." : result === "win" ? "победа!" : result === "lose" ? (Number(cashback) > 0 ? `кешбэк +${Number(cashback)}` : "не повезло") : chanceLabel}
         </div>
       </div>
     </div>

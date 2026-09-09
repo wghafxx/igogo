@@ -7,6 +7,7 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
   const [spinning, setSpinning] = useState(false);
   const [rotation, setRotation] = useState(180);
   const [fast, setFast] = useState(settings.fastSpin);
+  const [cashback, setCashback] = useState(0);
   const busyRef = useRef(false);
   const pending = useRef(null);
   const alive = useRef(true);
@@ -29,6 +30,7 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
     setSpinning(false);
     latest.current.onSpinningChange?.(false);
     latest.current.onResult(res.win ? "win" : "lose");
+    setCashback(Number(res.cashback) || 0);
     playResultSound(res.win, latest.current.settings.sound);
     latest.current.onUpgraded?.(res);
   }, []);
@@ -38,6 +40,7 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
     busyRef.current = true;
     setSpinning(true);
     setFast(settings.fastSpin); // changing settings cannot alter an active transition.
+    setCashback(0);
     onSpinningChange?.(true);
     onResult(null);
     prepareResultSounds();
@@ -56,5 +59,5 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
       toast.error(error?.response?.data?.detail || "Ошибка апгрейда");
     }
   };
-  return { spinning, rotation, fast, busyRef, runSpin, finishSpin };
+  return { spinning, rotation, fast, cashback, busyRef, runSpin, finishSpin };
 };

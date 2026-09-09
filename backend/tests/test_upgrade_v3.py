@@ -180,10 +180,11 @@ class TestSuccessPath:
             "target_item": {"id": GLOVE["id"]}, "chance": 0.4651})
         assert r.status_code == 200, r.text
         d = r.json()
-        assert abs(d["balance"] - 980.0) < 1e-6
+        # проигрыш от 10 RAP даёт кешбэк 1: баланс = 1000 - 20 + cashback
+        assert abs(d["balance"] - (980.0 + d.get("cashback", 0))) < 1e-6
         assert abs(d["angle"] - (d["roll"] * 360 - 180)) < 1e-6
         assert d["win"] == (abs(d["angle"]) < d["chance"] * 180)
-        assert client.get(f"{API}/user/{sid}").json()["balance"] == pytest.approx(980.0)
+        assert client.get(f"{API}/user/{sid}").json()["balance"] == pytest.approx(980.0 + d.get("cashback", 0))
         mongo.users.delete_many({"session_id": sid})
         mongo.upgrades.delete_many({"session_id": sid})
         mongo.drops.delete_many({"session_id": sid})

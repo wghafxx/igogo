@@ -99,7 +99,7 @@ class TestDeposit:
         assert r.status_code == 200
         d = r.json()
         assert "roblox.com/share" in d["friend_url"]
-        assert d["min_rap"] == 20
+        assert d["min_rap"] == 35
         assert d["fee"] == 0.2
 
 
@@ -226,11 +226,12 @@ class TestUpgradeFlow:
             "chance": (bet + cheap["price"]) / target["price"]})
         assert r.status_code == 200, r.text
         d = r.json()
-        assert d["balance"] == pytest.approx(1000.0 - bet)
+        # проигрыш от 10 RAP даёт кешбэк 1: баланс = 1000 - bet + cashback
+        assert d["balance"] == pytest.approx(1000.0 - bet + d.get("cashback", 0))
         assert 0 < d["chance"] <= 0.75
         u = mongo.users.find_one({"session_id": SESSION})
         assert not any(sk.get("uid") == "qa-uid-1" for sk in u["skins"])
-        assert u["balance"] == pytest.approx(1000.0 - bet)
+        assert u["balance"] == pytest.approx(1000.0 - bet + d.get("cashback", 0))
         if d["win"]:
             assert any(sk["id"] == target["id"] and sk.get("uid") and sk.get("image")
                        for sk in u["skins"])

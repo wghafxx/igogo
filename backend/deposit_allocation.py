@@ -13,8 +13,8 @@ def allocation(rap, bonus, catalog):
     rap_cents = cents(rap)
     bonus = min(Decimal("0.5"), max(Decimal("0"), Decimal(str(bonus or 0))))
     budget = int((Decimal(rap_cents) * Decimal("0.8") * (1 + bonus)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    if rap_cents < 2000:
-        raise ValueError("Минимальная сумма — 20 RAP")
+    if rap_cents < 3500:
+        raise ValueError("Минимальная сумма — 35 RAP")
     unique = {}
     for item in catalog:
         try:

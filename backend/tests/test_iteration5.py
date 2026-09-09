@@ -324,7 +324,7 @@ class TestRegression:
 
     def test_deposit_info(self):
         d = requests.get(f"{API}/deposit/info", timeout=20).json()
-        assert d["min_rap"] == 20 and d["fee"] == 0.20 and "roblox.com" in d["friend_url"]
+        assert d["min_rap"] == 35 and d["fee"] == 0.20 and "roblox.com" in d["friend_url"]
 
     def test_live_drops(self):
         r = requests.get(f"{API}/live-drops?limit=5", timeout=20)

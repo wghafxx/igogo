@@ -119,9 +119,11 @@ def test_balance_decreases_by_bet(client, session_id):
         "target_item": target(), "chance": 0.5,
     })
     assert r.status_code == 200, r.text
-    assert abs(r.json()["balance"] - (before - 25.5)) < 1e-6
+    d = r.json()
+    # проигрыш от 10 RAP даёт кешбэк 1: баланс = before - bet + cashback
+    assert abs(d["balance"] - (before - 25.5 + d.get("cashback", 0))) < 1e-6
     after = client.get(f"{BASE_URL}/api/user/{session_id}").json()["balance"]
-    assert abs(after - (before - 25.5)) < 1e-6
+    assert abs(after - (before - 25.5 + d.get("cashback", 0))) < 1e-6
 
 
 def test_win_pushes_skin_and_creates_drop(client, session_id):

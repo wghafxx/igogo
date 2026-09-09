@@ -158,10 +158,10 @@ const DepositRow = ({ d, onConfirm, onReject, busy }) => {
             data-testid="admin-amount-input"
           />
         </div>
-        {rap > 0 && rap < 20 && (
-          <div className="text-[11px] text-[#ff8a8a] px-1" data-testid="admin-credit-preview">Меньше 20 RAP — зачислить нельзя, отклоните заявку</div>
+        {rap > 0 && rap < 35 && (
+          <div className="text-[11px] text-[#ff8a8a] px-1" data-testid="admin-credit-preview">Меньше 35 RAP — зачислить нельзя, отклоните заявку</div>
         )}
-        {rap >= 20 && (
+        {rap >= 35 && (
           <div className="text-[11px] text-[#8e91a3] px-1" data-testid="admin-credit-preview">
             {formatMoney(rap)} − 20% = {formatMoney(net)}
             {d.promo_bonus > 0 && <> → +{Math.round(d.promo_bonus * 100)}% промо = <b className="text-[#2ecc71]">{formatMoney(credited)}</b></>}
@@ -172,7 +172,7 @@ const DepositRow = ({ d, onConfirm, onReject, busy }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => onConfirm(d.id, Number(amount), note)}
-            disabled={busy || rap < 20 || rap > 1000000 || !allocationReady}
+            disabled={busy || rap < 35 || rap > 1000000 || !allocationReady}
             className="flex-1 min-h-10 py-2 px-2 rounded-lg bg-[#2ecc71] hover:bg-[#3ddb80] text-black font-bold text-[12px] flex items-center justify-center gap-1.5 disabled:opacity-40 transition-colors"
             data-testid="admin-confirm-button"
           >

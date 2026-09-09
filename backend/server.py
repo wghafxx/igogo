@@ -74,6 +74,11 @@ async def external_service_error(request: Request, exc: httpx.HTTPError):
 ONLINE_WINDOW_SECONDS = 45
 MIN_CHANCE = 0.01
 MAX_CHANCE = 0.75
+# Кешбэк при проигрыше: 1 RAP с пула, только для ставок от 10 RAP.
+# Порог отсекает ферму мелочи (ставка 0.5 + кешбэк 1 = бесконечные деньги),
+# списание из пула держит жёсткий потолок: призы + кешбэки <= RTP × ставки.
+CASHBACK_AMOUNT = 1.0
+CASHBACK_MIN_BET = 10.0
 
 RARITIES = [
     {"key": "stock", "label": "Stock", "color": "#b8bcc9"},
@@ -160,7 +165,7 @@ class PromoIn(InputModel):
 
 class DepositIn(InputModel):
     description: str = Field(min_length=3, max_length=300)
-    expected_rap: float = Field(ge=20, le=1_000_000)
+    expected_rap: float = Field(ge=35, le=1_000_000)
     receiver_id: str = Field(min_length=1, max_length=32)
 
 
@@ -236,6 +241,8 @@ class UpgradeOut(BaseModel):
     angle: float
     balance: float
     upgrades_total: int
+    # Кешбэк, упавший этим проигрышным спином (0 если не было).
+    cashback: float = 0.0
 
 
 # ---------- Helpers ----------
@@ -355,7 +362,7 @@ async def record_admin_fail(ip: str) -> None:
 PROMO_CODES = {"SINZUKU": 0.10, "XYIPACHOSIK": 0.067}
 GOLD_PROMOS = {"XYIPACHOSIK"}
 DEPOSIT_FEE = 0.20
-MIN_DEPOSIT_RAP = 20
+MIN_DEPOSIT_RAP = 35
 DEPOSIT_COOLDOWN_SECONDS = 60
 ROBLOX_FRIEND_URL = "https://www.roblox.com/share?code=114adf7ac7b01243b752faf7c6c71b28&type=Profile&source=ProfileShare&stamp=1788366461111"
 RECEIVERS = [
@@ -975,6 +982,7 @@ async def profile(request: Request):
                 "items_total": u.get("items_total", 0),
                 "chance": u.get("display_chance", u.get("chance")),
                 "display_chance": u.get("display_chance", u.get("chance")),
+                "cashback": float(u.get("cashback") or 0),
                 "win": u.get("win"),
                 "target": u.get("target_item"),
             }
@@ -1153,7 +1161,7 @@ async def admin_deposit_preview(deposit_id: str, payload: AdminConfirmIn, reques
     if not dep:
         raise HTTPException(404, "Заявка не найдена")
     if payload.rap < MIN_DEPOSIT_RAP:
-        raise HTTPException(400, "Минимальная сумма — 20 RAP")
+        raise HTTPException(400, f"Минимальная сумма — {MIN_DEPOSIT_RAP} RAP")
     if dep["status"] == "processing":
         return {k: dep[k] for k in ("rap", "credited", "issued_skins", "skins_total", "balance_credited")}
     return await plan_deposit(db, dep, payload.rap)
@@ -1579,6 +1587,25 @@ async def upgrade(payload: UpgradeIn, request: Request):
     # визуально всё равно внутри зелёного, игрок ничего не замечает.
     angle = landing_angle(roll, chance, True) if win else landing_angle(roll, shown, False)
 
+    # Кешбэк при проигрыше: 1 RAP. Списывается из пула атомарно (pool >= 1),
+    # поэтому суммарные выплаты никогда не превышают RTP × ставки. Пуст пул —
+    # тихо нет кешбэка, прокрут от этого не ломается.
+    cashback = 0.0
+    if not win and total_bet >= CASHBACK_MIN_BET - 1e-9:
+        try:
+            cb_state = await db.bank_state.find_one_and_update(
+                {"id": "main", "pool": {"$gte": CASHBACK_AMOUNT}},
+                {"$inc": {"pool": -CASHBACK_AMOUNT}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if cb_state is not None:
+                cashback = CASHBACK_AMOUNT
+                new_balance = round(new_balance + cashback, 2)
+                await db.users.update_one({"session_id": payload.session_id}, {"$inc": {"balance": cashback}})
+        except Exception:
+            logger.exception("cashback error (spin continues without cashback)")
+            cashback = 0.0
+
     writes = [db.upgrades.insert_one({
         "id": upgrade_id,
         "session_id": payload.session_id,
@@ -1594,6 +1621,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         "forced_reason": forced_reason if forced_loss else None,
         "protection": protection,
         "luck": bool(luck_used),
+        "cashback": cashback,
         "created_at": now_utc(),
     })]
     if win:
@@ -1627,6 +1655,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         angle=angle,
         balance=new_balance,
         upgrades_total=upgrades_total,
+        cashback=cashback,
     )
 
 
