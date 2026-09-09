@@ -12,6 +12,7 @@ import { useSession, loadSettings, saveSettings, normalizeSettings } from "./hoo
 import { AuthProvider } from "./hooks/useAuth";
 import { SessionProvider, useSessionCtx } from "./hooks/useSessionCtx";
 import TosPage from "./pages/TosPage";
+import PrivacyPage from "./pages/PrivacyPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import ProfilePage from "./pages/ProfilePage";
 import PublicProfilePage from "./pages/PublicProfilePage";
@@ -34,8 +35,14 @@ const Shell = () => {
             <LiveDropStrip drops={session.drops} />
             <div className="px-3 py-4 sm:px-4 sm:py-6">
               <Outlet />
-              <footer className="pt-7 pb-2 text-center">
-                <button type="button" onClick={() => setSupportRequest({ kind: "general" })} className="text-xs text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-support-button">Поддержка · {SUPPORT_HANDLE}</button>
+              <footer className="pt-7 pb-2 text-center space-y-2">
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
+                  <Link to="/tos" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tos-link">Пользовательское соглашение</Link>
+                  <Link to="/privacy" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-privacy-link">Политика конфиденциальности</Link>
+                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("open-rub-topup"))} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tariffs-link">Тарифы</button>
+                  <button type="button" onClick={() => setSupportRequest({ kind: "general" })} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-support-button">Поддержка · {SUPPORT_HANDLE}</button>
+                </div>
+                <div className="text-[11px] text-[#5f6377]" data-testid="bank-codeword">Plaтега</div>
               </footer>
             </div>
           </main>
@@ -119,6 +126,7 @@ function App() {
             <Route element={<Shell />}>
               <Route path="/" element={<Home />} />
               <Route path="/tos" element={<TosPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/users/:discordId" element={<PublicProfilePage />} />
               <Route path="*" element={<div className="blox-panel max-w-[860px] mx-auto p-8 text-center" data-testid="not-found-page"><h1 className="text-3xl font-bold" data-testid="not-found-title">Страница не найдена</h1><Link to="/" className="inline-block mt-5 text-[#00a2ff]" data-testid="not-found-home">На главную</Link></div>} />

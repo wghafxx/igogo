@@ -1,5 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { SUPPORT_HANDLE } from "../components/SupportDialog";
+
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
 
 const SECTIONS = [
   {
@@ -63,14 +66,24 @@ const SECTIONS = [
     title: "7. Персональные данные",
     items: [
       "7.1. При авторизации через Discord Сервис получает идентификатор, имя пользователя и аватар. Иные данные не запрашиваются.",
-      "7.2. Данные используются исключительно для идентификации Пользователя и работы Сервиса и не передаются третьим лицам, за исключением случаев, предусмотренных законом.",
+      "7.2. Порядок обработки данных описан в Политике конфиденциальности (/privacy).",
     ],
   },
   {
-    title: "8. Поддержка и контакты",
+    title: "8. Оплата в рублях и возвраты",
     items: [
-      "8.1. По вопросам работы Сервиса Пользователь может обратиться в службу поддержки в Telegram: https://t.me/bloxgrade.",
-      "8.2. Споры разрешаются путём переговоров. Претензии рассматриваются в течение 14 рабочих дней с момента получения.",
+      "8.1. Пополнение баланса рублями производится через СБП по тарифу 1 RAP = 0,50 ₽. Актуальные пакеты и цены указаны в разделе пополнения на сайте.",
+      "8.2. Минимальный рублёвый платёж — 35 ₽ (70 RAP). Оплата производится на условиях, указанных в Сервисе до момента оплаты.",
+      "8.3. В связи с нематериальным характером цифровых товаров возврат денежных средств после зачисления не осуществляется, за исключением случаев, когда услуга не была оказана по технической вине Сервиса.",
+      "8.4. Для рассмотрения вопроса о возврате Пользователь обязан обратиться в службу поддержки в течение 24 часов с момента оплаты. Решение принимается Администрацией индивидуально.",
+      "8.5. Пользователь обязуется не инициировать возврат платежа (chargeback) через платёжные системы без предварительного обращения в службу поддержки Сервиса.",
+    ],
+  },
+  {
+    title: "9. Поддержка и контакты",
+    items: [
+      "9.1. По вопросам работы Сервиса Пользователь может обратиться в службу поддержки: личные сообщения в Telegram либо кнопка «Поддержка» внизу сайта (диалог тикетов).",
+      "9.2. Споры разрешаются путём переговоров. Претензии рассматриваются в течение 14 рабочих дней с момента получения.",
     ],
   },
 ];
@@ -81,7 +94,7 @@ export default function TosPage() {
         <div className="fade-up">
           <div className="text-[11px] uppercase tracking-[0.2em] text-[#00a2ff] font-bold">Правовая информация</div>
           <h1 className="text-[30px] sm:text-[36px] font-black leading-tight mt-2">Пользовательское соглашение</h1>
-          <p className="text-[13px] text-[#8e91a3] mt-2">Редакция от 1 июня 2026 г. Пожалуйста, внимательно ознакомьтесь с условиями перед использованием сервиса.</p>
+          <p className="text-[13px] text-[#8e91a3] mt-2">Редакция от 9 сентября 2026 г. Пожалуйста, внимательно ознакомьтесь с условиями перед использованием сервиса.</p>
         </div>
 
         <div className="mt-8 space-y-4">
@@ -102,9 +115,17 @@ export default function TosPage() {
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#5f6377]">
           <span>
             BLOXGRADE © 2026 · Поддержка:{" "}
-            <a href="https://t.me/bloxgrade" target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline font-semibold" data-testid="tos-telegram-link">
-              t.me/bloxgrade
-            </a>
+            {SUPPORT_URL ? (
+              <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline font-semibold" data-testid="tos-telegram-link">
+                {SUPPORT_HANDLE || "Telegram"}
+              </a>
+            ) : (
+              <span className="font-semibold">кнопка «Поддержка» внизу сайта</span>
+            )}{" "}
+            ·{" "}
+            <Link to="/privacy" className="text-[#00a2ff] hover:underline font-semibold" data-testid="tos-privacy-link">
+              Конфиденциальность
+            </Link>
           </span>
           <Link to="/" className="blox-btn-primary h-10 px-5 inline-flex items-center text-[13px]" data-testid="tos-accept-go-login">
             Вернуться на сайт

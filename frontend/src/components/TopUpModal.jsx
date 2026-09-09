@@ -9,7 +9,11 @@ import { api, pct } from "../lib/api";
 import { useAuth } from "../hooks/useAuth";
 import AmountStep from "./topup/AmountStep";
 import ReceiverStep from "./topup/ReceiverStep";
+import RubTopUp from "./topup/RubTopUp";
 import MyRequests from "./topup/MyRequests";
+import { SUPPORT_HANDLE } from "./SupportDialog";
+
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
 
 export const PromoInput = ({ compact = false }) => {
   const { authUser, setAuthUser } = useAuth();
@@ -100,6 +104,12 @@ export default function TopUpModal({ open, onOpenChange }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, authUser]);
   useEffect(() => {
+    const openRub = () => { setTab("rubles"); setStep("amount"); onOpenChange(true); };
+    window.addEventListener("open-rub-topup", openRub);
+    return () => window.removeEventListener("open-rub-topup", openRub);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
     if (!open || !authUser) return;
     const timer = setInterval(loadMine, 15000);
     return () => clearInterval(timer);
@@ -118,15 +128,20 @@ export default function TopUpModal({ open, onOpenChange }) {
         <div className="px-6 pt-4 pb-6 space-y-4 overflow-y-auto">
           {infoError && <div className="text-sm text-[#ff8a8a]" data-testid="topup-info-error">Не удалось загрузить данные пополнения. <button data-testid="topup-info-retry" onClick={loadInfo}>Повторить</button></div>}
           {mineError && <div className="text-sm text-[#ff8a8a]" data-testid="topup-requests-error">Не удалось загрузить заявки. <button data-testid="topup-requests-retry" onClick={loadMine}>Повторить</button></div>}
-          <div className="grid grid-cols-2 rounded-lg bg-[#0f1015] p-1">
+          <div className="grid grid-cols-3 rounded-lg bg-[#0f1015] p-1">
             <button onClick={() => setTab("skins")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "skins" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-skins">
               <BoxesIcon size={14} /> Скины
+            </button>
+            <button onClick={() => setTab("rubles")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "rubles" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-rubles">
+              ₽ Рубли
             </button>
             <button onClick={() => setTab("requests")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "requests" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-requests">
               <FileTextIcon size={14} /> Мои заявки
               {pendingCount > 0 && <span className="h-5 min-w-5 px-1.5 rounded-full bg-[#ffb000] text-black text-[11px] font-black flex items-center justify-center" data-testid="topup-pending-badge">{pendingCount}</span>}
             </button>
           </div>
+
+          {tab === "rubles" && <RubTopUp />}
 
           {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 35} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
           {tab === "skins" && step === "receiver" && (
@@ -139,7 +154,7 @@ export default function TopUpModal({ open, onOpenChange }) {
           )}
           {tab === "requests" && (authUser ? <MyRequests items={mine} onChanged={loadMine} onNew={() => { setTab("skins"); setStep("amount"); }} /> : <div className="h-[140px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="my-requests-guest">Войдите, чтобы видеть заявки</div>)}
 
-          <div className="text-[11px] text-[#5f6377] text-center leading-snug">Проверка обычно занимает до 30 минут. Вопросы — в Telegram t.me/bloxgrade.</div>
+          <div className="text-[11px] text-[#5f6377] text-center leading-snug">Проверка обычно занимает до 30 минут. Вопросы — {SUPPORT_URL ? (<a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline">напишите в поддержку{SUPPORT_HANDLE ? ` ${SUPPORT_HANDLE}` : ""}</a>) : "кнопка «Поддержка» внизу сайта"}.</div>
         </div>
       </DialogContent>
     </Dialog>
