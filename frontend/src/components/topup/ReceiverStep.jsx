@@ -46,6 +46,10 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
         <ArrowLeftIcon size={13} /> Изменить сумму
       </button>
 
+      <div className="rounded-lg bg-[#ff5c5c]/15 border border-[#ff5c5c]/50 px-3 py-2 text-center text-[15px] font-black uppercase tracking-wide text-[#ff3b3b] leading-snug" data-testid="topup-fake-warning">
+        Сравнивайте никнейм и аватарку — есть фейк-аккаунты!
+      </div>
+
       <div className="text-[12px] text-[#8e91a3]">Кому отправить трейд</div>
       <div className="space-y-2" data-testid="topup-receivers">
         {receivers.map((r) => (
