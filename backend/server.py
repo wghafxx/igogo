@@ -44,6 +44,8 @@ JWT_SECRET = os.environ['JWT_SECRET']
 ADMIN_SEED_HASH = os.environ['ADMIN_SEED_HASH'].encode()
 ADMIN_SEED_WORDS = 10
 ADMIN_TOKEN_HOURS = 4
+# Сколько админов могут сидеть в панели одновременно (4-й вход гасит самую старую сессию).
+MAX_ADMIN_SESSIONS = 3
 ADMIN_MAX_FAILS_IP = 5
 ADMIN_MAX_FAILS_GLOBAL = 20
 ADMIN_LOCK_MINUTES = 15
@@ -1115,7 +1117,13 @@ async def admin_login(payload: AdminLoginIn, request: Request):
         await record_admin_fail(ip)
         raise HTTPException(status_code=403, detail="Неверная сид-фраза")
     await db.login_attempts.delete_one({"identifier": f"ip:{ip}"})
-    await db.admin_sessions.update_many({"revoked": False}, {"$set": {"revoked": True}})
+    # Не гасим всех: держим до MAX_ADMIN_SESSIONS живых сессий, старейшие сверх лимита — отзываем.
+    now = now_utc()
+    alive = await db.admin_sessions.find(
+        {"revoked": False, "expires_at": {"$gt": now}}, {"_id": 0, "jti": 1},
+    ).sort("created_at", -1).to_list(MAX_ADMIN_SESSIONS + 10)
+    for old in alive[MAX_ADMIN_SESSIONS - 1:]:
+        await db.admin_sessions.update_one({"jti": old["jti"]}, {"$set": {"revoked": True}})
     jti = secrets.token_urlsafe(24)
     expires = now_utc() + timedelta(hours=ADMIN_TOKEN_HOURS)
     await db.admin_sessions.insert_one({"jti": jti, "ip": ip, "ua_hash": ua_hash(request), "created_at": now_utc(), "expires_at": expires, "revoked": False})
