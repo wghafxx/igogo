@@ -9,6 +9,7 @@ import { SearchIcon } from "./icons/search";
 import { WalletIcon } from "./icons/wallet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { api, formatMoney, inventoryTotal } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import { useAuth } from "../hooks/useAuth";
 import { rarityColor, rarityLabel } from "../lib/rarity";
 import { playTick } from "../lib/sound";
@@ -57,26 +58,26 @@ const PanelHeader = ({ title, children }) => (
 
 const GRID = "grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2";
 
-const MobileTabs = ({ value, onChange }) => (
+const MobileTabs = ({ t, value, onChange }) => (
   <div className="lg:hidden blox-panel p-1 grid grid-cols-2 gap-1" data-testid="mobile-skins-tabs">
     {[
-      { key: "mine", label: "Мои скины" },
-      { key: "shop", label: "Выберите скин" },
-    ].map((t) => (
+      { key: "mine", label: t("skins.mine") },
+      { key: "shop", label: t("skins.shop") },
+    ].map((tab) => (
       <button
-        key={t.key}
+        key={tab.key}
         type="button"
-        onClick={() => onChange(t.key)}
-        className={`h-10 rounded-lg text-[13px] font-bold transition-colors ${value === t.key ? "bg-[#00a2ff] text-white shadow-[0_4px_14px_rgba(0,162,255,0.35)]" : "text-[#8e91a3] hover:text-white"}`}
-        data-testid={`mobile-tab-${t.key}`}
+        onClick={() => onChange(tab.key)}
+        className={`h-10 rounded-lg text-[13px] font-bold transition-colors ${value === tab.key ? "bg-[#00a2ff] text-white shadow-[0_4px_14px_rgba(0,162,255,0.35)]" : "text-[#8e91a3] hover:text-white"}`}
+        data-testid={`mobile-tab-${tab.key}`}
       >
-        {t.label}
+        {tab.label}
       </button>
     ))}
   </div>
 );
 
-const PriceInput = ({ value, onChange, placeholder, testId }) => (
+const PriceInput = ({ value, onChange, placeholder, testId, ariaLabel }) => (
   <div className="relative">
     <RobuxIcon size={11} className="absolute left-2 top-1/2 -translate-y-1/2" />
     <input
@@ -86,7 +87,7 @@ const PriceInput = ({ value, onChange, placeholder, testId }) => (
         if (/^\d{0,9}(\.\d{0,2})?$/.test(next)) onChange(next);
       }}
       inputMode="decimal"
-      aria-label={placeholder === "От" ? "Минимальная цена" : "Максимальная цена"}
+      aria-label={ariaLabel}
       placeholder={placeholder}
       className="h-8 w-[62px] pl-6 pr-2 rounded-md bg-[#0f1015] text-[12px] text-white placeholder:text-[#5f6377] outline-none focus:ring-1 focus:ring-[#00a2ff]"
       data-testid={testId}
@@ -94,20 +95,20 @@ const PriceInput = ({ value, onChange, placeholder, testId }) => (
   </div>
 );
 
-const GuestInventory = ({ onLogin }) => (
+const GuestInventory = ({ t, onLogin }) => (
   <div className="relative p-2 pt-0" data-testid="guest-inventory">
     <div className="text-center pt-6 pb-4">
       <div className="font-bold text-[18px]" data-testid="guest-title">
-        Вы не авторизованы
+        {t("skins.guest_title")}
       </div>
-      <div className="text-[12px] text-[#7d8194] mt-1">Войдите для доступа к трейдам</div>
+      <div className="text-[12px] text-[#7d8194] mt-1">{t("skins.guest_text")}</div>
       <DiscordButton className="mt-4" onClick={onLogin} data-testid="inventory-login-button" />
     </div>
     <SkinShowcase size="md" className="mt-2" />
   </div>
 );
 
-const UserInventory = ({ skins, onTopUp, selectedUids, onToggle, disabled }) => (
+const UserInventory = ({ t, skins, onTopUp, selectedUids, onToggle, disabled }) => (
   <div className="relative p-2 pt-0" data-testid="user-inventory">
     {skins.length > 0 ? (
       <div className={GRID}>
@@ -124,7 +125,7 @@ const UserInventory = ({ skins, onTopUp, selectedUids, onToggle, disabled }) => 
         </div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="bg-[#0d0e12] rounded-xl px-7 py-5 text-center shadow-[0_10px_40px_rgba(0,0,0,0.6)]" data-testid="topup-skins-card">
-            <div className="font-bold text-[14px] mb-3">Пополните скины</div>
+            <div className="font-bold text-[14px] mb-3">{t("skins.topup_skins")}</div>
             <AnimButton
               icon={WalletIcon}
               size={14}
@@ -132,7 +133,7 @@ const UserInventory = ({ skins, onTopUp, selectedUids, onToggle, disabled }) => 
               onClick={onTopUp}
               data-testid="topup-skins-button"
             >
-              Пополнить
+              {t("skins.topup")}
             </AnimButton>
           </div>
         </div>
@@ -143,6 +144,7 @@ const UserInventory = ({ skins, onTopUp, selectedUids, onToggle, disabled }) => 
 
 export default function SkinsSection({ onTopUp, user, target, onSelectTarget, betSkins = [], onToggleBetSkin, sound, disabled }) {
   const { authUser, openAuth } = useAuth();
+  const { t } = useLang();
   const [sort, setSort] = useState("price_desc");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -166,7 +168,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
     const timer = setTimeout(() => api
       .shop(params)
       .then((d) => alive && setItems(d.items || []))
-      .catch(() => { if (alive) { setItems([]); setError("Не удалось загрузить каталог"); } })
+      .catch(() => { if (alive) { setItems([]); setError(t("skins.catalog_fail")); } })
       .finally(() => { if (alive) setLoading(false); }), 200);
     return () => {
       alive = false;
@@ -186,12 +188,12 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6 mt-4 sm:mt-5 fade-up" data-testid="skins-section">
-      <MobileTabs value={mobileTab} onChange={setMobileTab} />
+      <MobileTabs t={t} value={mobileTab} onChange={setMobileTab} />
       <div className={`blox-panel overflow-hidden ${mobileTab === "mine" ? "" : "hidden lg:block"}`} data-testid="my-skins-panel">
-        <PanelHeader title="Мои скины">
+        <PanelHeader title={t("skins.mine")}>
           {authUser && (
-            <div className="ml-auto flex items-center gap-2 h-8 px-3 rounded-md bg-[#0f1015]" title="Общая стоимость инвентаря" data-testid="inventory-value-chip">
-              <span className="text-[11px] text-[#8e91a3] whitespace-nowrap">Инвентарь · {user?.skins?.length || 0}</span>
+            <div className="ml-auto flex items-center gap-2 h-8 px-3 rounded-md bg-[#0f1015]" title={t("skins.inventory_value_hint")} data-testid="inventory-value-chip">
+              <span className="text-[11px] text-[#8e91a3] whitespace-nowrap">{t("skins.inventory")} · {user?.skins?.length || 0}</span>
               <span className="text-[13px] font-bold text-[#ffb000] tabular-nums flex items-center gap-1" data-testid="inventory-value">
                 {formatMoney(inventoryTotal(user?.skins))} <RobuxIcon size={10} />
               </span>
@@ -200,6 +202,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
         </PanelHeader>
         {authUser ? (
           <UserInventory
+            t={t}
             disabled={disabled}
             skins={user?.skins || []}
             onTopUp={onTopUp}
@@ -210,12 +213,12 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
             }}
           />
         ) : (
-          <GuestInventory onLogin={openAuth} />
+          <GuestInventory t={t} onLogin={openAuth} />
         )}
       </div>
 
       <div className={`blox-panel overflow-hidden ${mobileTab === "shop" ? "" : "hidden lg:block"}`} data-testid="shop-panel">
-        <PanelHeader title="Выберите скин">
+        <PanelHeader title={t("skins.shop")}>
           <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-2 min-w-0">
             <Select value={sort} onValueChange={setSort}>
               <SelectTrigger className="h-8 w-[100px] shrink-0 bg-[#0f1015] border-0 text-[12px] text-white focus:ring-0" data-testid="sort-select">
@@ -234,8 +237,8 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
               className={`flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-300 ease-out ${searchOpen ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"}`}
               data-testid="price-filters"
             >
-              <PriceInput value={minPrice} onChange={setMinPrice} placeholder="От" testId="min-price-input" />
-              <PriceInput value={maxPrice} onChange={setMaxPrice} placeholder="До" testId="max-price-input" />
+              <PriceInput value={minPrice} onChange={setMinPrice} placeholder={t("skins.from")} ariaLabel={t("skins.min_price")} testId="min-price-input" />
+              <PriceInput value={maxPrice} onChange={setMaxPrice} placeholder={t("skins.to")} ariaLabel={t("skins.max_price")} testId="max-price-input" />
             </div>
 
             <div
@@ -253,10 +256,10 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
                 ref={searchRef}
                 value={query}
                 maxLength={100}
-                aria-label="Поиск скина"
+                aria-label={t("skins.search")}
                 onChange={(e) => setQuery(e.target.value)}
                 onBlur={closeSearch}
-                placeholder="Поиск скина"
+                placeholder={t("skins.search")}
                 className={`h-8 bg-transparent text-[12px] text-white placeholder:text-[#5f6377] outline-none pr-2 transition-opacity duration-200 ${searchOpen ? "w-full opacity-100" : "w-0 opacity-0"}`}
                 data-testid="search-input"
               />
@@ -264,7 +267,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
           </div>
         </PanelHeader>
         <div className={`p-2 pt-0 ${GRID}`} data-testid="shop-grid">
-          {loading ? <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-loading">Загружаем скины…</div> : error ? <div className="col-span-full py-10 text-center text-sm" data-testid="shop-error">{error}<button className="block mx-auto mt-3 text-[#00a2ff]" data-testid="shop-retry" onClick={() => setRetry((v) => v + 1)}>Повторить</button></div> : sorted.length > 0
+          {loading ? <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-loading">{t("skins.loading")}</div> : error ? <div className="col-span-full py-10 text-center text-sm" data-testid="shop-error">{error}<button className="block mx-auto mt-3 text-[#00a2ff]" data-testid="shop-retry" onClick={() => setRetry((v) => v + 1)}>{t("skins.retry")}</button></div> : sorted.length > 0
             ? sorted.map((it) => (
                 <SkinCard
                   key={it.id || it.name}
@@ -278,7 +281,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
                   }}
                 />
               ))
-            : <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-empty">Скины не найдены. Измените поиск или диапазон цен.</div>}
+            : <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-empty">{t("skins.empty")}</div>}
         </div>
       </div>
     </section>

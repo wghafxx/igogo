@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Checkbox } from "./ui/checkbox";
 import DiscordButton from "./DiscordButton";
 import { discordLoginUrl } from "../lib/api";
+import { useLang } from "../lib/i18n";
 
 const Check = ({ checked, onChange, testId, children }) => (
   <label className="flex items-start gap-3 cursor-pointer select-none">
@@ -18,6 +19,7 @@ const Check = ({ checked, onChange, testId, children }) => (
 );
 
 export default function AuthModal({ open, onOpenChange }) {
+  const { t } = useLang();
   const [adult, setAdult] = useState(false);
   const [tos, setTos] = useState(false);
   const ready = adult && tos;
@@ -32,22 +34,22 @@ export default function AuthModal({ open, onOpenChange }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#1e1f23] border-0 text-white sm:max-w-[460px] p-0 overflow-hidden rounded-2xl" data-testid="auth-modal">
         <DialogHeader className="px-6 py-5 border-b border-[#2a2b31]">
-          <DialogTitle className="text-[18px] font-bold text-left">Авторизация</DialogTitle>
+          <DialogTitle className="text-[18px] font-bold text-left">{t("auth.title")}</DialogTitle>
         </DialogHeader>
         <div className="px-6 pt-5 pb-6 space-y-5">
           <p className="text-[15px] leading-snug" data-testid="auth-modal-text">
-            Чтобы продолжить, примите условия пользования сервиса и войдите через Discord.
+            {t("auth.text")}
           </p>
           <div className="space-y-3">
             <Check checked={adult} onChange={setAdult} testId="auth-adult-checkbox">
-              Я подтверждаю, что мне больше 18 лет
+              {t("auth.adult")}
             </Check>
             <Check checked={tos} onChange={setTos} testId="auth-tos-checkbox">
-              Я принимаю{" "}
+              {t("auth.accept")}{" "}
               <Link to="/tos" className="text-[#00a2ff] font-semibold hover:underline" onClick={() => onOpenChange(false)} data-testid="auth-tos-link">
-                правила и положения
+                {t("auth.tos")}
               </Link>{" "}
-              использования веб-сайта
+              {t("auth.tos_tail")}
             </Check>
           </div>
           <DiscordButton size="lg" className="w-full" onClick={startLogin} disabled={!ready} data-testid="discord-login-button" />

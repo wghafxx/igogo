@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getLang } from "./i18n";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -10,8 +11,9 @@ export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localSt
 const http = axios.create({ baseURL: API, withCredentials: true, timeout: 20000 });
 const normalizeError = (error) => {
   const detail = error.response?.data?.detail;
-  if (Array.isArray(detail)) error.response.data.detail = detail.map((d) => d.msg || "Проверьте введённые данные").join(". ");
-  else if (detail && typeof detail === "object") error.response.data.detail = "Проверьте введённые данные";
+  const fallback = getLang() === "en" ? "Check your input" : "Проверьте введённые данные";
+  if (Array.isArray(detail)) error.response.data.detail = detail.map((d) => d.msg || fallback).join(". ");
+  else if (detail && typeof detail === "object") error.response.data.detail = fallback;
   return Promise.reject(error);
 };
 http.interceptors.response.use((response) => response, normalizeError);
@@ -55,7 +57,7 @@ export const api = {
 };
 
 export const formatNumber = (n) =>
-  new Intl.NumberFormat("ru-RU").format(Math.round(Number(n) || 0));
+  new Intl.NumberFormat(getLang() === "en" ? "en-US" : "ru-RU").format(Math.round(Number(n) || 0));
 
 // Сервер отдаёт даты из Mongo «голыми» (без часового пояса, по факту UTC).
 // Без поправки браузер читает их как локальное время и все часы плывут
@@ -66,7 +68,7 @@ export const parseServerDate = (d) => {
 };
 
 export const formatMoney = (n) =>
-  new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
+  new Intl.NumberFormat(getLang() === "en" ? "en-US" : "ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
 export const inventoryTotal = (skins) => (skins || []).reduce((a, s) => a + Number(s.price || 0), 0);
 

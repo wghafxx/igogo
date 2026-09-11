@@ -18,10 +18,25 @@ import { LinkIcon } from "../components/icons/link";
 import { useAuth } from "../hooks/useAuth";
 import { useSessionCtx } from "../hooks/useSessionCtx";
 import { api, formatMoney, inventoryTotal, parseServerDate } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import { rarityColor } from "../lib/rarity";
 import { DepositReceipt } from "../components/DepositReceipt";
 
-const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", deposited: "profile.kind_deposited" };
+
+const InventoryCard = ({ t, item, active, onToggle, onSell, onWithdraw, busy }) => (
+  <div className={`inv-card ${active ? "active" : ""}`} style={{ "--rarity": rarityColor(item.rarity) }} data-testid="inventory-item">
+    <SkinCard item={item} selected={active} onClick={onToggle} />
+    <div className="inv-actions" onClick={(e) => e.stopPropagation()}>
+      <button className="btn-sell" disabled={busy} onClick={onSell} data-testid="item-sell-button">
+        {t("profile.sell")} {formatMoney(item.price)} <RobuxIcon size={9} />
+      </button>
+      <button className="btn-withdraw" disabled={busy} onClick={onWithdraw} data-testid="item-withdraw-button">
+        <SendIcon size={11} /> {t("profile.withdraw")}
+      </button>
+    </div>
+  </div>
+);
 
 const Stat = ({ title, icon: Icon, children, testId }) => (
   <div className="blox-panel p-4 flex flex-col gap-2" data-testid={testId}>
@@ -35,25 +50,11 @@ const Stat = ({ title, icon: Icon, children, testId }) => (
   </div>
 );
 
-const KIND = { won: "Выигран", sold: "Продан", withdrawn: "Выведен", withdraw_requested: "На выводе", deposited: "Депозит" };
-
-const InventoryCard = ({ item, active, onToggle, onSell, onWithdraw, busy }) => (
-  <div className={`inv-card ${active ? "active" : ""}`} style={{ "--rarity": rarityColor(item.rarity) }} data-testid="inventory-item">
-    <SkinCard item={item} selected={active} onClick={onToggle} />
-    <div className="inv-actions" onClick={(e) => e.stopPropagation()}>
-      <button className="btn-sell" disabled={busy} onClick={onSell} data-testid="item-sell-button">
-        Продать · {formatMoney(item.price)} <RobuxIcon size={9} />
-      </button>
-      <button className="btn-withdraw" disabled={busy} onClick={onWithdraw} data-testid="item-withdraw-button">
-        <SendIcon size={11} /> Вывести
-      </button>
-    </div>
-  </div>
-);
-
 export default function ProfilePage() {
   const { authUser, loading, setAuthUser } = useAuth();
   const { refreshUser, openWithdrawalSupport } = useSessionCtx();
+  const { t, lang } = useLang();
+  const fmtDate = (d) => parseServerDate(d).toLocaleString(lang === "en" ? "en-US" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("inventory");
   const [active, setActive] = useState(null);
@@ -89,17 +90,17 @@ export default function ProfilePage() {
       load();
       refreshUser();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Ошибка");
+      toast.error(e?.response?.data?.detail || t("common.error"));
     } finally {
       setBusy(false);
     }
   };
-  const sell = (uids) => act(api.sellSkins, uids, (n) => `Продано ${n} предм. — баланс пополнен`);
-  const withdraw = (uids) => act(api.withdrawSkins, uids, (n) => `Заявка на вывод ${n} предм. создана`, openWithdrawalSupport);
+  const sell = (uids) => act(api.sellSkins, uids, (n) => `${t("profile.sold")} ${n} ${t("common.items_unit")} — ${t("profile.sold_tail")}`);
+  const withdraw = (uids) => act(api.withdrawSkins, uids, (n) => `${t("profile.withdraw_created")} ${n} ${t("common.items_unit")} ${t("profile.withdraw_created_tail")}`, openWithdrawalSupport);
 
   return (
     <div className="max-w-[1000px] mx-auto space-y-4" data-testid="profile-page">
-      {loadError && <div className="blox-panel p-4 text-sm text-[#ff8a8a]" data-testid="profile-load-error">Не удалось загрузить профиль. <button onClick={load} className="text-[#00a2ff]" data-testid="profile-retry">Повторить</button></div>}
+      {loadError && <div className="blox-panel p-4 text-sm text-[#ff8a8a]" data-testid="profile-load-error">{t("profile.load_fail")} <button onClick={load} className="text-[#00a2ff]" data-testid="profile-retry">{t("common.retry")}</button></div>}
         <div className="blox-panel p-3 grid grid-cols-1 md:grid-cols-[300px_1fr_1fr] gap-3 fade-up">
           <div className="rounded-xl bg-[#0f1015] p-4 flex flex-col gap-3" data-testid="profile-card">
             <div className="flex items-center gap-4">
@@ -107,15 +108,15 @@ export default function ProfilePage() {
               <div className="min-w-0">
                 <Nick gold={authUser?.gold_nick} className="font-bold text-[15px] truncate block" testId="profile-page-nickname">{authUser?.nickname}</Nick>
                 <div className="mt-1 inline-flex items-center text-[11px] text-[#8e91a3] bg-[#1c1d25] rounded px-2 py-0.5" data-testid="profile-page-id">ID {authUser?.discord_id}</div>
-                {authUser?.gold_nick && <div className="mt-1 text-[10px] font-bold text-[#ffb000]" data-testid="profile-gold-badge">★ Золотой ник</div>}
+                {authUser?.gold_nick && <div className="mt-1 text-[10px] font-bold text-[#ffb000]" data-testid="profile-gold-badge">{t("profile.gold")}</div>}
               </div>
             </div>
             <button
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(`${window.location.origin}/users/${authUser?.discord_id}`);
-                  toast.success("Ссылка на профиль скопирована");
-                } catch { toast.error("Не удалось скопировать ссылку"); }
+                  toast.success(t("profile.copy_link"));
+                } catch { toast.error(t("profile.copy_fail")); }
               }}
               className="h-9 rounded-lg bg-[#1c1d25] hover:bg-[#22242e] text-[12px] font-bold text-[#c9ccd8] flex items-center justify-center gap-2 px-3 transition-colors"
               title={`${window.location.origin}/users/${authUser?.discord_id}`}
@@ -126,22 +127,22 @@ export default function ProfilePage() {
             <RobloxLinkCard />
           </div>
 
-          <Stat title="Баланс" icon={CircleDollarSignIcon} testId="profile-balance-block">
+          <Stat title={t("profile.balance")} icon={CircleDollarSignIcon} testId="profile-balance-block">
             <div className="text-[28px] font-black flex items-center gap-2 leading-none" data-testid="profile-balance">
               {formatMoney(data?.user?.balance ?? authUser?.balance)} <RobuxIcon size={20} />
             </div>
             <div className="flex items-center justify-between text-[12px] rounded-md bg-[#0f1015] px-2.5 py-1.5" data-testid="profile-inventory-value-block">
-              <span className="text-[#8e91a3] flex items-center gap-1.5"><BoxesIcon size={13} className="text-[#ffb000]" /> Инвентарь · {skins.length} предм.</span>
+              <span className="text-[#8e91a3] flex items-center gap-1.5"><BoxesIcon size={13} className="text-[#ffb000]" /> {t("profile.inventory")} · {skins.length} {t("common.items_unit")}</span>
               <span className="font-bold flex items-center gap-1 tabular-nums" data-testid="profile-inventory-value">{formatMoney(invTotal)} <RobuxIcon size={10} /></span>
             </div>
             <PromoInput compact />
             <button onClick={() => setTopUpOpen(true)} className="h-10 rounded-lg bg-[#ffb000] hover:bg-[#ffc233] text-black font-bold text-[13px] flex items-center justify-center gap-2 transition-colors" data-testid="profile-topup-button">
-              <WalletIcon size={15} /> Пополнить баланс
+              <WalletIcon size={15} /> {t("profile.topup")}
             </button>
           </Stat>
 
           <div className="grid grid-rows-[1fr_auto] gap-3">
-            <Stat title="Лучший дроп" icon={SparklesIcon} testId="profile-best-drop">
+            <Stat title={t("profile.best")} icon={SparklesIcon} testId="profile-best-drop">
               {data?.best_drop ? (
                 <div className="flex items-center gap-3" style={{ "--rarity": rarityColor(data.best_drop.item_rarity) }}>
                   <img src={data.best_drop.item_image} alt="" className="w-14 h-14 object-contain" />
@@ -152,17 +153,17 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-[12px] text-[#5f6377]">Отобразится после первой игры</div>
+                <div className="text-[12px] text-[#5f6377]">{t("profile.best_empty")}</div>
               )}
             </Stat>
             <div className="grid grid-cols-2 gap-3">
-              <Stat title="Выведено" icon={SendIcon} testId="profile-withdrawn">
-                <div className="text-[12px] text-[#8e91a3]">{data?.stats?.withdrawn_count ?? 0} предметов</div>
+              <Stat title={t("profile.withdrawn")} icon={SendIcon} testId="profile-withdrawn">
+                <div className="text-[12px] text-[#8e91a3]">{data?.stats?.withdrawn_count ?? 0} {t("profile.withdrawn_items")}</div>
                 <div className="font-bold flex items-center gap-1">{formatMoney(data?.stats?.withdrawn_sum)} <RobuxIcon size={11} /></div>
               </Stat>
-              <Stat title="Апгрейдов" icon={Logo} testId="profile-upgrades">
+              <Stat title={t("profile.upgrades")} icon={Logo} testId="profile-upgrades">
                 <div className="text-[22px] font-black leading-none">{data?.stats?.upgrades ?? 0}</div>
-                <div className="text-[11px] text-[#8e91a3]">побед: {data?.stats?.wins ?? 0}</div>
+                <div className="text-[11px] text-[#8e91a3]">{t("profile.wins")} {data?.stats?.wins ?? 0}</div>
               </Stat>
             </div>
           </div>
@@ -172,10 +173,10 @@ export default function ProfilePage() {
           <div className="px-3 py-2.5 flex flex-wrap items-center gap-2 border-b border-[#15161b]">
             <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[#0f1015] p-1">
               {[
-                ["inventory", BoxesIcon, "Инвентарь"],
-                ["items", HistoryIcon, "История предметов"],
-                ["games", ZapIcon, "История игр"],
-                ["payments", PayIcon, "Платежи"],
+                ["inventory", BoxesIcon, t("profile.tab_inventory")],
+                ["items", HistoryIcon, t("profile.tab_items")],
+                ["games", ZapIcon, t("profile.tab_games")],
+                ["payments", PayIcon, t("profile.tab_payments")],
               ].map(([k, Icon, label]) => (
                 <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold flex items-center gap-1.5 transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`profile-tab-${k}`}>
                   <Icon size={13} /> {label}
@@ -185,10 +186,10 @@ export default function ProfilePage() {
             {tab === "inventory" && (
               <div className="ml-auto flex items-center gap-3">
                 <span className="text-[12px] text-[#8e91a3] hidden sm:flex items-center gap-1.5" data-testid="inventory-total-label">
-                  Стоимость инвентаря: <span className="font-bold text-white flex items-center gap-1 tabular-nums">{formatMoney(invTotal)} <RobuxIcon size={10} /></span>
+                  {t("profile.inventory_total")} <span className="font-bold text-white flex items-center gap-1 tabular-nums">{formatMoney(invTotal)} <RobuxIcon size={10} /></span>
                 </span>
                 <button onClick={() => sell(skins.map((s) => s.uid))} disabled={busy || skins.length === 0} className="btn-sell h-8 px-3" data-testid="sell-all-button">
-                  Продать всё · {formatMoney(invTotal)} <RobuxIcon size={9} />
+                  {t("profile.sell_all")} {formatMoney(invTotal)} <RobuxIcon size={9} />
                 </button>
               </div>
             )}
@@ -198,11 +199,12 @@ export default function ProfilePage() {
             {tab === "inventory" &&
               (skins.length ? (
                 <>
-                  <div className="text-[11px] text-[#5f6377] mb-2" data-testid="inventory-hint">Нажмите на предмет, чтобы продать или вывести его</div>
+                  <div className="text-[11px] text-[#5f6377] mb-2" data-testid="inventory-hint">{t("profile.inventory_hint")}</div>
                   <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-8 gap-2" data-testid="profile-inventory">
                     {skins.map((s) => (
                       <InventoryCard
                         key={s.uid}
+                        t={t}
                         item={s}
                         active={active === s.uid}
                         busy={busy}
@@ -214,17 +216,17 @@ export default function ProfilePage() {
                   </div>
                 </>
               ) : (
-                <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="profile-inventory-empty">У вас пока нет предметов</div>
+                <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="profile-inventory-empty">{t("profile.inventory_empty")}</div>
               ))}
 
             {tab === "items" && (
               <div className="space-y-1.5" data-testid="profile-item-history">
-                {(data?.item_history || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">История пуста</div>}
+                {(data?.item_history || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">{t("profile.history_empty")}</div>}
                 {(data?.item_history || []).map((h) => (
                   <div key={h.id} className="h-12 px-3 rounded-lg bg-[#0f1015] flex items-center gap-3 text-[12px]" style={{ boxShadow: `inset 3px 0 0 ${rarityColor(h.item?.rarity)}` }}>
                     {h.item?.image && <img src={h.item.image} alt="" className="w-9 h-9 object-contain" />}
                     <div className="min-w-0 flex-1"><span className="font-bold">{h.item?.name}</span> <span className="text-[#7d8194]">{h.item?.type}</span></div>
-                    <span className={`font-bold ${h.kind === "won" ? "text-[#2ecc71]" : h.kind === "sold" ? "text-[#ffb000]" : "text-[#00a2ff]"}`}>{KIND[h.kind] || h.kind}</span>
+                    <span className={`font-bold ${h.kind === "won" ? "text-[#2ecc71]" : h.kind === "sold" ? "text-[#ffb000]" : "text-[#00a2ff]"}`}>{KIND_KEYS[h.kind] ? t(KIND_KEYS[h.kind]) : h.kind}</span>
                     <span className="font-bold flex items-center gap-1 w-24 justify-end">{formatMoney(h.price)} <RobuxIcon size={10} /></span>
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(h.created_at)}</span>
                   </div>
@@ -234,7 +236,7 @@ export default function ProfilePage() {
 
             {tab === "payments" && (
               <div className="space-y-1.5" data-testid="profile-payments">
-                {deposits.length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">Пополнений пока нет</div>}
+                {deposits.length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">{t("profile.payments_empty")}</div>}
                 {deposits.map((d) => (
                   <div key={d.id} className="min-h-12 px-3 py-2 rounded-lg bg-[#0f1015] flex flex-wrap items-center gap-3 text-[12px]" data-testid="profile-payment-item">
                     <span className="flex-1 min-w-0 truncate text-[#b4b7c7]">{d.description}{d.expected_rap > 0 ? <span className="text-[#8e91a3]"> · {formatMoney(d.expected_rap)} RAP{d.receiver_nick ? ` → ${d.receiver_nick}` : ""}</span> : null}</span>
@@ -248,13 +250,13 @@ export default function ProfilePage() {
 
             {tab === "games" && (
               <div className="space-y-1.5" data-testid="profile-games-history">
-                {(data?.games || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">Игр пока нет</div>}
+                {(data?.games || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">{t("profile.games_empty")}</div>}
                 {(data?.games || []).map((g) => (
                   <div key={g.id} className="h-12 px-3 rounded-lg bg-[#0f1015] flex items-center gap-3 text-[12px]">
-                    <span className={`w-16 font-bold ${g.win ? "text-[#2ecc71]" : "text-[#ff5c5c]"}`}>{g.win ? "Победа" : "Проигрыш"}</span>
+                    <span className={`w-16 font-bold ${g.win ? "text-[#2ecc71]" : "text-[#ff5c5c]"}`}>{g.win ? t("profile.win") : t("profile.loss")}</span>
                     <span className="text-[#8e91a3] w-14">{(Number(g.display_chance ?? g.chance) * 100).toFixed(1)}%</span>
-                    {Number(g.cashback) > 0 && <span className="text-[#2ecc71] text-[11px] font-bold whitespace-nowrap">кешбэк +{Number(g.cashback)}</span>}
-                    <span className="flex-1 min-w-0 truncate"><span className="text-[#7d8194]">Цель:</span> <span className="font-bold">{g.target?.name}</span></span>
+                    {Number(g.cashback) > 0 && <span className="text-[#2ecc71] text-[11px] font-bold whitespace-nowrap">{t("profile.cashback")} +{Number(g.cashback)}</span>}
+                    <span className="flex-1 min-w-0 truncate"><span className="text-[#7d8194]">{t("profile.target")}</span> <span className="font-bold">{g.target?.name}</span></span>
                     <span className="font-bold flex items-center gap-1 w-28 justify-end">{formatMoney(Number(g.bet_amount) + Number(g.items_total || 0))} <RobuxIcon size={10} /></span>
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(g.created_at)}</span>
                   </div>

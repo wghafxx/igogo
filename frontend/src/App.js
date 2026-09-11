@@ -9,6 +9,18 @@ import SkinsSection from "./components/SkinsSection";
 import SettingsModal from "./components/SettingsModal";
 import { Logo } from "./components/Logo";
 import { useSession, loadSettings, saveSettings, normalizeSettings } from "./hooks/useSession";
+import { LangProvider, useLang } from "./lib/i18n";
+import LangSwitcher from "./components/LangSwitcher";
+
+const NotFound = () => {
+  const { t } = useLang();
+  return (
+    <div className="blox-panel max-w-[860px] mx-auto p-8 text-center" data-testid="not-found-page">
+      <h1 className="text-3xl font-bold" data-testid="not-found-title">{t("footer.not_found")}</h1>
+      <Link to="/" className="inline-block mt-5 text-[#00a2ff]" data-testid="not-found-home">{t("common.back_home")}</Link>
+    </div>
+  );
+};
 import { AuthProvider } from "./hooks/useAuth";
 import { SessionProvider, useSessionCtx } from "./hooks/useSessionCtx";
 import TosPage from "./pages/TosPage";
@@ -22,6 +34,7 @@ import { SupportDialog, SUPPORT_HANDLE } from "./components/SupportDialog";
 // Header + live-drop feed shared by every page
 const Shell = () => {
   const session = useSession();
+  const { t } = useLang();
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [supportRequest, setSupportRequest] = useState(null);
   const openWithdrawalSupport = (count) => setSupportRequest({ kind: "withdrawal", count });
@@ -37,10 +50,10 @@ const Shell = () => {
               <Outlet />
               <footer className="pt-7 pb-2 text-center space-y-2">
                 <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs">
-                  <Link to="/tos" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tos-link">Пользовательское соглашение</Link>
-                  <Link to="/privacy" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-privacy-link">Политика конфиденциальности</Link>
-                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("open-rub-topup"))} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tariffs-link">Тарифы</button>
-                  <button type="button" onClick={() => setSupportRequest({ kind: "general" })} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-support-button">Поддержка · {SUPPORT_HANDLE}</button>
+                  <Link to="/tos" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tos-link">{t("footer.tos")}</Link>
+                  <Link to="/privacy" className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-privacy-link">{t("footer.privacy")}</Link>
+                  <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("open-rub-topup"))} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-tariffs-link">{t("footer.tariffs")}</button>
+                  <button type="button" onClick={() => setSupportRequest({ kind: "general" })} className="text-[#8e91a3] hover:text-[#00a2ff] transition-colors" data-testid="footer-support-button">{t("footer.support")} · {SUPPORT_HANDLE}</button>
                 </div>
                 <div className="text-[11px] text-[#5f6377]" data-testid="bank-codeword">Plaтега</div>
               </footer>
@@ -121,20 +134,22 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route element={<Shell />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/tos" element={<TosPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/users/:discordId" element={<PublicProfilePage />} />
-              <Route path="*" element={<div className="blox-panel max-w-[860px] mx-auto p-8 text-center" data-testid="not-found-page"><h1 className="text-3xl font-bold" data-testid="not-found-title">Страница не найдена</h1><Link to="/" className="inline-block mt-5 text-[#00a2ff]" data-testid="not-found-home">На главную</Link></div>} />
-            </Route>
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/admin" element={<AdminPage />} />
-          </Routes>
-        </AuthProvider>
+        <LangProvider>
+          <AuthProvider>
+            <Routes>
+              <Route element={<Shell />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/tos" element={<TosPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/users/:discordId" element={<PublicProfilePage />} />
+                <Route path="*" element={<NotFound />} />
+              </Route>
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/admin" element={<AdminPage />} />
+            </Routes>
+          </AuthProvider>
+        </LangProvider>
       </BrowserRouter>
       <Toaster theme="dark" position="top-center" richColors />
     </div>

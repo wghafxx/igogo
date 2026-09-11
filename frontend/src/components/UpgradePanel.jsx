@@ -17,10 +17,11 @@ import { XIcon } from "./icons/x";
 import { playTick, prepareResultSounds } from "../lib/sound";
 import { useUpgradeSpin } from "../hooks/useUpgradeSpin";
 import { useAuth } from "../hooks/useAuth";
+import { useLang } from "../lib/i18n";
 
-const SlotItem = ({ item, onRemove, testId, disabled }) => (
+const SlotItem = ({ item, onRemove, testId, disabled, removeTitle }) => (
   <div className="slot-item" style={{ "--rarity": rarityColor(item.rarity) }} data-testid={testId}>
-    <AnimButton icon={XIcon} size={14} className="target-remove" disabled={disabled} onClick={onRemove} title="Убрать" data-testid={`${testId}-remove`} />
+    <AnimButton icon={XIcon} size={14} className="target-remove" disabled={disabled} onClick={onRemove} title={removeTitle} data-testid={`${testId}-remove`} />
     <div className="text-center px-8 sm:px-10 pt-3 sm:pt-5">
       <div className="text-[10px] sm:text-[11px] text-[#9a9db0] uppercase tracking-wide truncate">{item.type}</div>
       <div className="text-[14px] sm:text-[17px] font-bold truncate" data-testid={`${testId}-name`}>{item.name}</div>
@@ -53,13 +54,14 @@ const ToolIcon = ({ label, icon, onClick, active, testId, iconProps }) => (
 
 export default function UpgradePanel({ sessionId, user, settings, onSettingsChange, onOpenSettings, onUpgraded, onSpinningChange, target, onClearTarget, betSkins = [], onRemoveBetSkin }) {
   const { authUser, openAuth } = useAuth();
+  const { t, lang } = useLang();
   const [bet, setBet] = useState(0);
   const [chance, setChance] = useState(0.5);
   const [cfg, setCfg] = useState({ rtp: 0.85, min_chance: 0.01, max_chance: 0.75, max_bet_ratio: 0.75 / 0.85 });
   const [configReady, setConfigReady] = useState(false);
   useEffect(() => {
-    api.gameConfig().then((value) => { setCfg(value); setConfigReady(true); }).catch(() => toast.error("Не удалось загрузить параметры игры. Обновите страницу."));
-  }, []);
+    api.gameConfig().then((value) => { setCfg(value); setConfigReady(true); }).catch(() => toast.error(lang === "en" ? "Couldn't load game settings. Refresh the page." : "Не удалось загрузить параметры игры. Обновите страницу."));
+  }, [lang]);
   const MAX_CHANCE = cfg.max_chance;
   const RTP = cfg.rtp;
   const MAX_RATIO = cfg.max_bet_ratio;
@@ -136,13 +138,15 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
 
   const targetPrice = targetPriceNum;
 
+  const removeTitle = lang === "en" ? "Remove" : "Убрать";
+
   return (
     <section className="fade-up" data-testid="upgrade-panel">
       <div className="flex items-center gap-1 mb-2">
-        <ToolIcon label="Как работает апгрейд" icon={CircleHelpIcon} onClick={() => toast.info("Выберите цель, добавьте скин или баланс и нажмите «Прокачать». Шанс зависит от стоимости ставки и цели.")} testId="info-icon" />
-        <ToolIcon label="Настройки" icon={SettingsIcon} onClick={onOpenSettings} testId="settings-icon" />
+        <ToolIcon label={t("upgrade.how")} icon={CircleHelpIcon} onClick={() => toast.info(t("upgrade.how_text"))} testId="info-icon" />
+        <ToolIcon label={t("upgrade.settings")} icon={SettingsIcon} onClick={onOpenSettings} testId="settings-icon" />
         <ToolIcon
-          label={settings.sound ? "Звук включен" : "Звук выключен"}
+          label={settings.sound ? t("upgrade.sound_on") : t("upgrade.sound_off")}
           icon={VolumeIcon}
           iconProps={{ on: settings.sound }}
           active={settings.sound}
@@ -150,7 +154,7 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
           testId="sound-icon"
         />
         <ToolIcon
-          label={settings.fastSpin ? "Ускоренная прокрутка" : "Обычная прокрутка"}
+          label={settings.fastSpin ? t("upgrade.fast_on") : t("upgrade.fast_off")}
           icon={ZapIcon}
           active={settings.fastSpin}
           onClick={() => onSettingsChange({ ...settings, fastSpin: !settings.fastSpin })}
@@ -161,11 +165,11 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
       {/* Row 1: source panel | gauge | target panel */}
       <div className="grid grid-cols-2 lg:grid-cols-[1fr_300px_1fr] gap-2 sm:gap-3 lg:gap-x-6 lg:gap-y-3 items-stretch">
         <div className="blox-panel relative overflow-hidden h-[230px] sm:h-[300px] px-3 sm:px-4 pt-4 sm:pt-5 pb-3 sm:pb-4 flex flex-col order-2 lg:order-none" data-testid="source-panel">
-          {betSkins.length > 0 && <SlotItem item={betSkins[0]} disabled={spinning} onRemove={() => onRemoveBetSkin(betSkins[0].uid)} testId="bet-skin" />}
+          {betSkins.length > 0 && <SlotItem item={betSkins[0]} disabled={spinning} onRemove={() => onRemoveBetSkin(betSkins[0].uid)} testId="bet-skin" removeTitle={removeTitle} />}
           <div className="text-center">
-            <div className="text-[12px] sm:text-[13px] font-bold">Выберите скины или скины и баланс для использования</div>
+            <div className="text-[12px] sm:text-[13px] font-bold">{t("upgrade.source_title")}</div>
             <div className="text-[11px] text-[#7d8194] mt-1 flex items-center justify-center gap-1">
-              Ставка: <RobuxIcon size={11} /> <span className="tabular-nums" data-testid="total-bet">{formatMoney(totalBet)}</span>
+              {t("upgrade.bet")} <RobuxIcon size={11} /> <span className="tabular-nums" data-testid="total-bet">{formatMoney(totalBet)}</span>
             </div>
           </div>
           <div className="upgrade-slot slot-bg flex-1 flex items-center justify-center" data-testid="source-slot">
@@ -179,11 +183,11 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
         </div>
 
         <div className="blox-panel relative overflow-hidden h-[230px] sm:h-[300px] px-3 sm:px-4 pt-4 sm:pt-5 pb-3 sm:pb-4 flex flex-col order-3 lg:order-none" data-testid="target-panel">
-          {target && <SlotItem item={target} disabled={spinning} onRemove={onClearTarget} testId="target-item" />}
+          {target && <SlotItem item={target} disabled={spinning} onRemove={onClearTarget} testId="target-item" removeTitle={removeTitle} />}
           <div className="text-center">
-            <div className="text-[12px] sm:text-[13px] font-bold">Выберите скин для апгрейда</div>
+            <div className="text-[12px] sm:text-[13px] font-bold">{t("upgrade.target_title")}</div>
             <div className="text-[11px] text-[#7d8194] mt-1 flex items-center justify-center gap-1">
-              Цель: <RobuxIcon size={11} /> <span className="tabular-nums">{formatMoney(targetPrice)}</span>
+              {t("upgrade.target")} <RobuxIcon size={11} /> <span className="tabular-nums">{formatMoney(targetPrice)}</span>
             </div>
           </div>
           <div className="upgrade-slot slot-bg flex-1 flex items-center justify-center" data-testid="target-slot">
@@ -195,15 +199,15 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
         {/* Row 2: balance | upgrade button | quick pick */}
         <div className="blox-panel min-h-11 px-4 py-1.5 flex flex-col justify-center gap-1.5 col-span-2 lg:col-span-1 order-5 lg:order-none" data-testid="balance-slider-block">
           <div className="flex items-center justify-between gap-2 text-[10px] leading-none">
-            <span className="text-[#7d8194] whitespace-nowrap">Сумма баланса</span>
+            <span className="text-[#7d8194] whitespace-nowrap">{t("upgrade.balance_amount")}</span>
             <span className="flex items-center gap-1 font-bold whitespace-nowrap">
               <span className="tabular-nums" data-testid="bet-amount">{formatMoney(bet)}</span> <RobuxIcon size={10} />
-              <span className="text-[#5f6377] font-normal">(макс {formatMoney(maxBet)})</span>
+              <span className="text-[#5f6377] font-normal">({t("upgrade.max")} {formatMoney(maxBet)})</span>
             </span>
           </div>
           <Slider
             data-testid="bet-slider"
-            aria-label="Сумма ставки с баланса"
+            aria-label={t("upgrade.balance_amount")}
             value={[Math.min(bet, maxBet)]}
             min={0}
             max={Math.max(maxBet, 0.01)}
@@ -221,7 +225,7 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
           data-testid="upgrade-button"
         >
           <Logo size={16} />
-          {spinning ? "Крутим..." : !authUser ? "Войти через Discord" : !target ? "Выберите скин" : overLimit ? `Ставка выше ${Math.round(MAX_RATIO * 100)}% цели` : "Прокачать"}
+          {spinning ? t("upgrade.spinning") : !authUser ? t("upgrade.login") : !target ? t("upgrade.pick_skin") : overLimit ? `${t("upgrade.over_limit")} ${Math.round(MAX_RATIO * 100)}% ${t("upgrade.over_limit_tail")}` : t("upgrade.go")}
         </button>
 
         <div className="blox-panel min-h-11 px-2 py-1.5 flex flex-wrap items-center justify-between gap-2 col-span-2 lg:col-span-1 order-6 lg:order-none" data-testid="quick-pick">

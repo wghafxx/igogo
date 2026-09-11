@@ -1,4 +1,5 @@
 import React from "react";
+import { useLang } from "../lib/i18n";
 
 export const DiscordIcon = ({ size = 18, className = "" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-label="Discord">
@@ -6,7 +7,8 @@ export const DiscordIcon = ({ size = 18, className = "" }) => (
   </svg>
 );
 
-export default function DiscordButton({ onClick, disabled, className = "", children = "Войти через Discord", size = "md", ...props }) {
+export default function DiscordButton({ onClick, disabled, className = "", children, size = "md", ...props }) {
+  const { t } = useLang();
   const sizes = { sm: "h-9 px-4 text-[13px]", md: "h-11 px-6 text-[14px]", lg: "h-12 px-8 text-[15px]" };
   return (
     <button
@@ -17,7 +19,7 @@ export default function DiscordButton({ onClick, disabled, className = "", child
       {...props}
     >
       <DiscordIcon size={size === "sm" ? 16 : 19} />
-      <span>{children}</span>
+      <span>{children ?? t("auth.login_discord")}</span>
     </button>
   );
 }

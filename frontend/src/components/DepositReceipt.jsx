@@ -1,17 +1,19 @@
 import React from "react";
 import { formatMoney } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import { rarityColor } from "../lib/rarity";
 
 export const DepositReceipt = ({ deposit, testId, compact = false }) => {
+  const { t } = useLang();
   if (!deposit || !["confirmed", "processing"].includes(deposit.status)) return null;
   const skins = deposit.issued_skins || [];
   const balance = deposit.balance_credited ?? deposit.credited ?? deposit.amount ?? 0;
   return (
     <div className="w-full space-y-2 text-[11px] text-[#b4b7c7]" data-testid={testId}>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
-        <span data-testid={`${testId}-skins-total`}>Скины: <b className="text-[#ffb000]">{skins.length} шт. · {formatMoney(deposit.skins_total || 0)} RAP</b></span>
-        <span data-testid={`${testId}-balance`}>На баланс: <b className="text-[#2ecc71]">{formatMoney(balance)} RAP</b></span>
-        <span data-testid={`${testId}-total`}>Всего: <b>{formatMoney(deposit.credited ?? deposit.amount)} RAP</b></span>
+        <span data-testid={`${testId}-skins-total`}>{t("receipt.skins")} <b className="text-[#ffb000]">{skins.length} {t("receipt.pcs")} · {formatMoney(deposit.skins_total || 0)} RAP</b></span>
+        <span data-testid={`${testId}-balance`}>{t("receipt.to_balance")} <b className="text-[#2ecc71]">{formatMoney(balance)} RAP</b></span>
+        <span data-testid={`${testId}-total`}>{t("receipt.total")} <b>{formatMoney(deposit.credited ?? deposit.amount)} RAP</b></span>
       </div>
       {skins.length > 0 && <div className={`grid gap-2 ${compact ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-3"}`}>
         {skins.map((skin) => (

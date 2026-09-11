@@ -1,4 +1,5 @@
 import React from "react";
+import { useLang } from "../lib/i18n";
 
 const CX = 150;
 const CY = 150;
@@ -26,6 +27,7 @@ const edge = (deg) => {
 
 // Static wheel: the win-strip sits at the bottom; the pointer starts at the bottom and spins.
 export default function Gauge({ chance, rotation, spinning, fast, result, cashback, onSpinEnd }) {
+  const { t } = useLang();
   const half = Math.min(chance * 180, 179.9);
   const zoneFrom = 180 - half;
   const zoneTo = 180 + half;
@@ -42,7 +44,7 @@ export default function Gauge({ chance, rotation, spinning, fast, result, cashba
 
   const ringClass = `gauge-ring ${fast ? "fast" : ""}`;
   const centerColor = result === "win" ? "#2ecc71" : result === "lose" ? "#ff5c5c" : "#ffffff";
-  const chanceLabel = chance <= 0.15 ? "низкий шанс" : chance <= 0.5 ? "средний шанс" : "высокий шанс";
+  const chanceLabel = chance <= 0.15 ? t("gauge.low") : chance <= 0.5 ? t("gauge.mid") : t("gauge.high");
   const pTop = CY - R - STROKE / 2; // outer edge of ring at top
 
   return (
@@ -122,7 +124,7 @@ export default function Gauge({ chance, rotation, spinning, fast, result, cashba
           {(chance * 100).toFixed(2)}%
         </div>
         <div className="text-[12px] text-[#7d8194] mt-1.5" data-testid="gauge-label">
-          {spinning ? "крутим..." : result === "win" ? "победа!" : result === "lose" ? (Number(cashback) > 0 ? `кешбэк +${Number(cashback)}` : "не повезло") : chanceLabel}
+          {spinning ? t("gauge.spinning") : result === "win" ? t("gauge.win") : result === "lose" ? (Number(cashback) > 0 ? `${t("gauge.cashback")} +${Number(cashback)}` : t("gauge.lose")) : chanceLabel}
         </div>
       </div>
     </div>

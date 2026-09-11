@@ -7,17 +7,14 @@ import { RobuxIcon } from "../Logo";
 import RobloxLinkCard from "../RobloxLinkCard";
 import { api, formatMoney } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import { useLang } from "../../lib/i18n";
 import { calcCredit } from "./AmountStep";
 
-const STEPS = [
-  "Добавьте наш аккаунт в друзья и дождитесь принятия заявки.",
-  "Зайдите в игру, откройте Trade Plaza и выберите наш ник в списке друзей.",
-  "Положите в трейд свои скины (каждый от 35 RAP) и отправьте — ничего не просите взамен.",
-  "Впишите ниже названия скинов и нажмите «Подтвердить».",
-];
+const STEPS_KEYS = ["receiver.step1", "receiver.step2", "receiver.step3", "receiver.step4"];
 
 export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
   const { authUser } = useAuth();
+  const { t } = useLang();
   const [receiver, setReceiver] = useState(receivers[0]);
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,11 +27,11 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
     setBusy(true);
     try {
       const d = await api.createDeposit({ description: desc.trim(), expected_rap: Number(rap), receiver_id: receiver.id });
-      toast.success("Заявка отправлена. После проверки трейда получите скины и остаток на баланс");
+      toast.success(t("receiver.sent"));
       onDone(d);
     } catch (e) {
       const m = e?.response?.data?.detail;
-      toast.error(typeof m === "string" ? m : "Не удалось отправить заявку");
+      toast.error(typeof m === "string" ? m : t("receiver.fail"));
     } finally {
       setBusy(false);
     }
@@ -43,14 +40,10 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
   return (
     <div className="space-y-4" data-testid="topup-receiver-step">
       <button onClick={onBack} className="text-[12px] text-[#8e91a3] hover:text-white inline-flex items-center gap-1" data-testid="topup-back-button">
-        <ArrowLeftIcon size={13} /> Изменить сумму
+        <ArrowLeftIcon size={13} /> {t("receiver.back")}
       </button>
 
-      <div className="rounded-lg bg-[#ff5c5c]/15 border border-[#ff5c5c]/50 px-3 py-2 text-center text-[15px] font-black uppercase tracking-wide text-[#ff3b3b] leading-snug" data-testid="topup-fake-warning">
-        Сравнивайте никнейм и аватарку — есть фейк-аккаунты!
-      </div>
-
-      <div className="text-[12px] text-[#8e91a3]">Кому отправить трейд</div>
+      <div className="text-[12px] text-[#8e91a3]">{t("receiver.to")}</div>
       <div className="space-y-2" data-testid="topup-receivers">
         {receivers.map((r) => (
           <div
@@ -64,36 +57,40 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
               <div className="text-[12px] text-[#8e91a3]">{r.handle} · Roblox</div>
             </button>
             <a href={r.friend_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="h-9 px-3 rounded-lg bg-[#00a2ff] hover:bg-[#1ab0ff] text-white text-[12px] font-bold inline-flex items-center gap-1.5 shrink-0" data-testid="topup-open-profile">
-              Профиль <ExternalLinkIcon size={12} />
+              {t("receiver.profile")} <ExternalLinkIcon size={12} />
             </a>
           </div>
         ))}
       </div>
 
+      <div className="rounded-lg bg-[#ff5c5c]/15 border border-[#ff5c5c]/50 px-3 py-2 text-center text-[15px] font-black uppercase tracking-wide text-[#ff3b3b] leading-snug" data-testid="topup-fake-warning">
+        {t("receiver.fake")}
+      </div>
+
       <ol className="space-y-1.5" data-testid="topup-steps">
-        {STEPS.map((s, i) => (
-          <li key={i} className="flex gap-2.5 text-[12px] text-[#b4b7c7] leading-snug">
+        {STEPS_KEYS.map((key, i) => (
+          <li key={key} className="flex gap-2.5 text-[12px] text-[#b4b7c7] leading-snug">
             <span className="w-5 h-5 rounded-full bg-[#ffb000] text-black font-black text-[11px] flex items-center justify-center shrink-0">{i + 1}</span>
-            <span>{s}</span>
+            <span>{t(key)}</span>
           </li>
         ))}
       </ol>
 
       <div className="rounded-lg bg-[#ff5c5c]/10 border border-[#ff5c5c]/40 px-3 py-2 flex items-start gap-2 text-[11px] text-[#ff9b9b] leading-snug" data-testid="topup-warning">
         <BadgeAlertIcon size={14} className="shrink-0 mt-0.5" />
-        <span>Скины дешевле 35 RAP не зачисляются. Отправляйте трейд только с аккаунта, привязанного ниже — иначе мы не поймём, кому начислять. <b>Без оранжевого значка, цена будет равноценна графику продаж! Сверяйте график продаж.</b></span>
+        <span>{t("receiver.warn")} <b>{t("receiver.warn_note")}</b></span>
       </div>
 
       <div className="rounded-xl bg-[#0f1015] p-3 space-y-2" data-testid="topup-roblox-block">
-        <div className="text-[11px] uppercase text-[#7d8194]">Ваш Roblox (с него должен прийти трейд)</div>
+        <div className="text-[11px] uppercase text-[#7d8194]">{t("receiver.roblox_title")}</div>
         <RobloxLinkCard />
-        {!linked && <div className="text-[11px] text-[#ff9b9b]" data-testid="topup-roblox-required">Без привязанного Roblox отправить заявку нельзя.</div>}
+        {!linked && <div className="text-[11px] text-[#ff9b9b]" data-testid="topup-roblox-required">{t("receiver.roblox_required")}</div>}
       </div>
 
       <textarea
         value={desc}
         onChange={(e) => setDesc(e.target.value.slice(0, 300))}
-        placeholder="Названия скинов, которые отправили. Например: Karambit Tiger Stripes, Glove Case ×2"
+        placeholder={t("receiver.desc_ph")}
         className="w-full h-20 p-3 rounded-xl bg-[#0f1015] outline-none text-[13px] resize-none focus:ring-1 focus:ring-[#ffb000] placeholder:text-[#5f6377]"
         data-testid="deposit-description-input"
       />
@@ -104,7 +101,7 @@ export default function ReceiverStep({ receivers, rap, onBack, onDone }) {
         className="w-full py-3.5 rounded-xl bg-[#ffb000] hover:bg-[#ffc233] disabled:opacity-40 text-black font-black text-[15px] flex flex-wrap items-center justify-center gap-2 transition-colors"
         data-testid="deposit-submit-button"
       >
-        Подтвердить · {formatMoney(Number(rap))} RAP <span className="text-[12px] font-bold text-black/60 inline-flex items-center gap-1">(скины + остаток: {formatMoney(credit)} <RobuxIcon size={11} />)</span>
+        {t("receiver.confirm")} · {formatMoney(Number(rap))} RAP <span className="text-[12px] font-bold text-black/60 inline-flex items-center gap-1">{t("receiver.skins_remainder")} {formatMoney(credit)} <RobuxIcon size={11} />)</span>
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
+import { getLang } from "../lib/i18n";
 import { playTick, prepareResultSounds, playResultSound, stopResultSound } from "../lib/sound";
 
 export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResult, onChance }) => {
@@ -56,7 +57,7 @@ export const useUpgradeSpin = ({ settings, onUpgraded, onSpinningChange, onResul
       busyRef.current = false;
       setSpinning(false);
       latest.current.onSpinningChange?.(false);
-      toast.error(error?.response?.data?.detail || "Ошибка апгрейда");
+      toast.error(error?.response?.data?.detail || (getLang() === "en" ? "Upgrade failed" : "Ошибка апгрейда"));
     }
   };
   return { spinning, rotation, fast, cashback, busyRef, runSpin, finishSpin };

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
 import { useAuth } from "../../hooks/useAuth";
 import { SUPPORT_HANDLE } from "../SupportDialog";
+import { useLang } from "../../lib/i18n";
 
 const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/bloxgradesupport";
 
@@ -13,6 +14,7 @@ const QUICK_RUB = [35, 50, 100, 250, 500, 1000];
 
 export default function RubTopUp() {
   const { authUser, openAuth } = useAuth();
+  const { t } = useLang();
   const [rub, setRub] = useState("");
   const [pending, setPending] = useState(null);
 
@@ -25,13 +27,13 @@ export default function RubTopUp() {
     if (!Number.isFinite(num) || num < MIN_RUB || num > 1000000) return;
     // Онлайн-приём СБП на согласовании: фиксируем сумму и ведём в поддержку.
     setPending({ rub: num, rap });
-    toast.info("Онлайн-оплата подключается. Сумма зафиксирована — напишите в поддержку для оплаты.");
+    toast.info(t("rub.connecting"));
   };
 
   return (
     <div className="space-y-4" data-testid="topup-rub-step">
       <div className="flex flex-wrap gap-2 items-center justify-between">
-        <span className="text-[13px] font-bold">Сумма в рублях (СБП)</span>
+        <span className="text-[13px] font-bold">{t("rub.title")}</span>
         <div className="flex flex-wrap items-center gap-1.5" data-testid="rub-quick-amounts">
           {QUICK_RUB.map((q) => (
             <button key={q} onClick={() => { setRub(String(q)); setPending(null); }} className={`h-6 px-2 rounded-md text-[11px] font-bold transition-colors ${num === q ? "bg-[#ffb000] text-black" : "bg-[#2a2b31] text-[#8e91a3] hover:text-white"}`} data-testid={`rub-quick-${q}`}>
@@ -51,8 +53,8 @@ export default function RubTopUp() {
           data-testid="rub-input"
         />
         <div className="text-right shrink-0">
-          <div className="text-[11px] text-[#ffb000] font-bold">₽ через СБП</div>
-          <div className={`text-[11px] ${tooSmall ? "text-[#ff8a8a]" : "text-[#7d8194]"}`}>мин. {MIN_RUB} ₽ · 1 RAP = 0,50 ₽</div>
+          <div className="text-[11px] text-[#ffb000] font-bold">{t("rub.per")}</div>
+          <div className={`text-[11px] ${tooSmall ? "text-[#ff8a8a]" : "text-[#7d8194]"}`}>{t("rub.min_rate")}</div>
         </div>
       </div>
 
@@ -62,9 +64,9 @@ export default function RubTopUp() {
         className="w-full h-13 py-3.5 rounded-xl bg-[#ffb000] hover:bg-[#ffc233] disabled:opacity-40 disabled:hover:bg-[#ffb000] text-black font-black text-[15px] flex items-center justify-center gap-2 transition-colors"
         data-testid="rub-pay-button"
       >
-        {!authUser ? "Войти для пополнения" : (
+        {!authUser ? t("rub.login") : (
           <>
-            Оплатить
+            {t("rub.pay")}
             {num >= MIN_RUB && (
               <span className="flex items-center gap-1.5">
                 {num} ₽
@@ -77,18 +79,17 @@ export default function RubTopUp() {
 
       {pending && (
         <div className="rounded-xl bg-[#00a2ff]/10 border border-[#00a2ff]/40 px-4 py-3 text-[12px] text-[#b4d9ff] leading-relaxed" data-testid="rub-pending-notice">
-          Вы выбрали <b>{pending.rub} ₽ ≈ {pending.rap} RAP</b>. Онлайн-приём платежей через СБП сейчас подключается.
-          Для оплаты напишите в поддержку{SUPPORT_HANDLE ? <>: <b>{SUPPORT_HANDLE}</b></> : ""} — менеджер примет платёж и зачислит RAP вручную.
+          {t("rub.chosen")} <b>{pending.rub} ₽ ≈ {pending.rap} RAP</b>. {t("rub.pending")}{SUPPORT_HANDLE ? <>: <b>{SUPPORT_HANDLE}</b></> : ""} {t("rub.pending_manager")}
           {SUPPORT_URL && (
             <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="mt-2 h-9 rounded-lg bg-[#00a2ff] hover:bg-[#1ab0ff] text-white font-bold text-[12px] items-center justify-center flex" data-testid="rub-support-link">
-              Написать в поддержку
+              {t("rub.support_btn")}
             </a>
           )}
         </div>
       )}
 
       <div className="text-[11px] text-[#8e91a3] text-center leading-snug" data-testid="rub-terms-note">
-        Нажимая «Оплатить», вы принимаете условия раздела 8 Пользовательского соглашения (/tos): возврат после зачисления не производится, кроме технической вины сервиса (обращение в течение 24 часов).
+        {t("rub.terms")}
       </div>
     </div>
   );

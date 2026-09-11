@@ -1,21 +1,23 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, getToken, setToken } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import AuthModal from "../components/AuthModal";
 import { useLocation } from "react-router-dom";
 
 const AuthContext = createContext(null);
 
 const ERRORS = {
-  denied: "Вход через Discord отменён",
-  state: "Сессия авторизации устарела, попробуйте ещё раз",
-  token: "Discord не подтвердил вход. Попробуйте ещё раз",
-  profile: "Не удалось получить профиль Discord",
-  unavailable: "Вход через Discord пока недоступен: администратору нужно настроить приложение Discord.",
+  denied: "auth.err_denied",
+  state: "auth.err_state",
+  token: "auth.err_token",
+  profile: "auth.err_profile",
+  unavailable: "auth.err_unavailable",
 };
 
 export function AuthProvider({ children }) {
   const location = useLocation();
+  const { t } = useLang();
   const [authUser, setAuthUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
@@ -38,13 +40,13 @@ export function AuthProvider({ children }) {
         setToken(null);
         setAuthUser(null);
       } else {
-        toast.error("Не удалось проверить сессию. Данные входа сохранены; попробуйте позже.");
+        toast.error(t("auth.err_session"));
       }
       return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     refresh();
@@ -52,11 +54,11 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const err = new URLSearchParams(location.search).get("auth_error");
     if (err) {
-      toast.error(ERRORS[err] || "Ошибка авторизации");
+      toast.error(t(ERRORS[err] || "auth.err_token"));
       setAuthOpen(true);
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [location.search]);
+  }, [location.search, t]);
 
   const login = useCallback(
     async (token) => {
@@ -70,12 +72,12 @@ export function AuthProvider({ children }) {
     try {
       await api.logout();
     } catch {
-      toast.error("Не удалось завершить выход. Проверьте соединение и повторите.");
+      toast.error(t("auth.err_logout"));
       return;
     }
     setToken(null);
     setAuthUser(null);
-  }, []);
+  }, [t]);
 
   const openAuth = useCallback(() => setAuthOpen(true), []);
 

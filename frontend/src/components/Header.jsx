@@ -12,6 +12,8 @@ import { BellIcon } from "./icons/bell";
 import { WalletIcon } from "./icons/wallet";
 import { SendIcon } from "./icons/send";
 import { formatNumber, formatMoney } from "../lib/api";
+import { useLang } from "../lib/i18n";
+import LangSwitcher from "./LangSwitcher";
 import { useAuth } from "../hooks/useAuth";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
@@ -37,7 +39,7 @@ const StatBlock = ({ label, value, icon, mobile = false }) => (
   </div>
 );
 
-const ProfileMenu = ({ authUser, onLogout }) => (
+const ProfileMenu = ({ t, authUser, onLogout }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <button className="blox-chip h-9 pl-1 pr-2.5 flex items-center gap-2 text-white font-bold text-sm" data-testid="profile-button">
@@ -49,7 +51,7 @@ const ProfileMenu = ({ authUser, onLogout }) => (
       </button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" className="w-56 bg-[#16171d] border-0 text-white" data-testid="profile-menu">
-      <DropdownMenuLabel className="text-xs text-[#8e91a3]">Аккаунт Discord</DropdownMenuLabel>
+      <DropdownMenuLabel className="text-xs text-[#8e91a3]">{t("header.discord_account")}</DropdownMenuLabel>
       <div className="px-2 pb-2 flex items-center gap-2">
         <img src={authUser.avatar} alt="" className="w-8 h-8 rounded-md" />
         <div className="min-w-0">
@@ -60,22 +62,22 @@ const ProfileMenu = ({ authUser, onLogout }) => (
       <DropdownMenuSeparator className="bg-[#262833]" />
       <DropdownMenuItem asChild className="focus:bg-[#22242e] focus:text-white cursor-pointer">
         <Link to="/profile" data-testid="menu-profile-link">
-          <UserIcon size={14} className="mr-2" /> Профиль
+          <UserIcon size={14} className="mr-2" /> {t("header.profile")}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild className="focus:bg-[#22242e] focus:text-white cursor-pointer">
         <Link to={`/users/${authUser.discord_id}`} data-testid="menu-public-profile-link">
-          <LinkIcon size={14} className="mr-2" /> Моя публичная страница
+          <LinkIcon size={14} className="mr-2" /> {t("header.public_page")}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild className="focus:bg-[#22242e] focus:text-white cursor-pointer">
         <Link to="/tos" data-testid="menu-tos-link">
-          <FileTextIcon size={14} className="mr-2" /> Пользовательское соглашение
+          <FileTextIcon size={14} className="mr-2" /> {t("header.tos")}
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator className="bg-[#262833]" />
       <DropdownMenuItem onClick={onLogout} className="focus:bg-[#22242e] focus:text-white cursor-pointer text-[#ff6b6b]" data-testid="logout-button">
-        <LogoutIcon size={14} className="mr-2" /> Выйти
+        <LogoutIcon size={14} className="mr-2" /> {t("header.logout")}
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
@@ -83,6 +85,7 @@ const ProfileMenu = ({ authUser, onLogout }) => (
 
 export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
   const { authUser, logout, openAuth } = useAuth();
+  const { t } = useLang();
   const openTopUp = () => setTopUpOpen(true);
 
   return (
@@ -98,23 +101,26 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
 
         <StatBlock
           mobile
-          label="Онлайн"
+          label={t("header.online")}
           value={<span data-testid="online-count">{formatNumber(stats.online)}</span>}
           icon={<span className="inline-block w-2.5 h-2.5 rounded-full bg-[#2ecc71] pulse-dot" />}
         />
         <StatBlock
-          label="Апгрейдов"
+          label={t("header.upgrades")}
           value={<span data-testid="upgrades-count">{formatNumber(stats.upgrades)}</span>}
           icon={<Logo size={16} />}
         />
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="hidden md:block">
+          <LangSwitcher />
+        </div>
         <AnimButton
           icon={SendIcon}
           size={15}
           className="blox-chip w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white"
-          title="Наш Telegram"
+          title={t("header.telegram")}
           onClick={() => window.open(CHANNEL_URL, "_blank", "noopener")}
           data-testid="telegram-link"
         />
@@ -140,26 +146,26 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#16171d] border-0 text-white">
-                <DropdownMenuLabel className="text-[#8e91a3] text-xs">Баланс</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-[#8e91a3] text-xs">{t("header.balance")}</DropdownMenuLabel>
                 <div className="px-2 pb-2 flex items-center gap-2 text-lg font-bold">
                   <RobuxIcon size={18} /> {formatMoney(user.balance)}
                 </div>
                 <DropdownMenuSeparator className="bg-[#262833]" />
                 <DropdownMenuItem onClick={openTopUp} className="focus:bg-[#22242e] focus:text-white cursor-pointer">
-                  <WalletIcon size={14} className="mr-2" /> Пополнить
+                  <WalletIcon size={14} className="mr-2" /> {t("header.topup")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
             <AnimButton icon={WalletIcon} size={16} className="blox-btn-primary h-9 px-4 hidden sm:flex items-center gap-2 text-sm" onClick={openTopUp} data-testid="topup-button">
-              <span>Пополнить</span>
+              <span>{t("header.topup")}</span>
             </AnimButton>
             <AnimButton
               icon={WalletIcon}
               size={16}
               className="blox-btn-primary w-9 h-9 flex sm:hidden items-center justify-center"
               onClick={openTopUp}
-              title="Пополнить"
+              title={t("header.topup")}
               data-testid="topup-button-mobile"
             />
 
@@ -168,17 +174,17 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
                 <AnimButton icon={BellIcon} size={18} className="w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white transition-colors" data-testid="notifications-button" />
               </PopoverTrigger>
               <PopoverContent align="end" className="w-72 bg-[#16171d] border-0 text-white p-0 shadow-xl">
-                <div className="px-4 py-3 border-b border-[#262833] font-bold text-sm">Уведомления</div>
-                <div className="px-4 py-8 text-center text-sm text-[#8e91a3]">Нет новых уведомлений</div>
+                <div className="px-4 py-3 border-b border-[#262833] font-bold text-sm">{t("header.notifications")}</div>
+                <div className="px-4 py-8 text-center text-sm text-[#8e91a3]">{t("header.no_notifications")}</div>
               </PopoverContent>
             </Popover>
 
-            <ProfileMenu authUser={authUser} onLogout={logout} />
+            <ProfileMenu t={t} authUser={authUser} onLogout={logout} />
           </>
         ) : (
           <DiscordButton size="sm" className="whitespace-nowrap shrink-0" onClick={openAuth} data-testid="header-login-button">
-            <span className="sm:hidden">Войти</span>
-            <span className="hidden sm:inline">Войти через Discord</span>
+            <span className="sm:hidden">{t("header.login")}</span>
+            <span className="hidden sm:inline">{t("header.login_discord")}</span>
           </DiscordButton>
         )}
       </div>

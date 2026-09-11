@@ -6,6 +6,7 @@ import { FileTextIcon } from "./icons/file-text";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { api, pct } from "../lib/api";
+import { useLang } from "../lib/i18n";
 import { useAuth } from "../hooks/useAuth";
 import AmountStep from "./topup/AmountStep";
 import ReceiverStep from "./topup/ReceiverStep";
@@ -17,6 +18,7 @@ const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/
 
 export const PromoInput = ({ compact = false }) => {
   const { authUser, setAuthUser } = useAuth();
+  const { t } = useLang();
   const [code, setCode] = useState(authUser?.promo_code || "");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -30,9 +32,9 @@ export const PromoInput = ({ compact = false }) => {
     try {
       const u = await api.applyPromo(code.trim());
       setAuthUser(u);
-      toast.success(`Промокод ${u.promo_code} активирован: +${pct(u.promo_bonus)}% к пополнению`);
+      toast.success(`${t("topup.promo_word")} ${u.promo_code} ${t("topup.promo_ok")}: +${pct(u.promo_bonus)}% ${t("topup.promo_topup_bonus")}`);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Промокод не найден");
+      toast.error(e?.response?.data?.detail || t("topup.promo_fail"));
     } finally {
       setBusy(false);
     }
@@ -46,7 +48,7 @@ export const PromoInput = ({ compact = false }) => {
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === "Enter" && apply()}
-          placeholder="Введите промокод"
+          placeholder={t("topup.promo_placeholder")}
           maxLength={32}
           className="flex-1 min-w-0 bg-transparent outline-none text-[13px] font-bold tracking-wide placeholder:font-normal placeholder:text-[#5f6377]"
           data-testid="promo-input"
@@ -62,28 +64,36 @@ export const PromoInput = ({ compact = false }) => {
       </div>
       {authUser?.promo_bonus > 0 && !compact && (
         <div className="mt-2 h-8 rounded-md bg-[#ffb000]/15 text-[#ffb000] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-bonus">
-          +{pct(authUser.promo_bonus)}% к депозиту
+          +{pct(authUser.promo_bonus)}% {t("topup.promo_bonus")}
         </div>
       )}
     </div>
   );
 };
 
-const STATUS = {
-  pending: ["Ожидает проверки", "text-[#ffb000]"],
-  processing: ["Начисляется", "text-[#ffb000]"],
-  confirmed: ["Зачислено", "text-[#2ecc71]"],
-  rejected: ["Отклонено", "text-[#ff5c5c]"],
-  cancelled: ["Отменена", "text-[#9a9db0]"],
+const STATUS_STYLE = {
+  pending: "text-[#ffb000]",
+  processing: "text-[#ffb000]",
+  confirmed: "text-[#2ecc71]",
+  rejected: "text-[#ff5c5c]",
+  cancelled: "text-[#9a9db0]",
+};
+const STATUS_KEYS = {
+  pending: "topup.status_pending",
+  processing: "topup.status_processing",
+  confirmed: "topup.status_confirmed",
+  rejected: "topup.status_rejected",
+  cancelled: "topup.status_cancelled",
 };
 
 export const DepositStatus = ({ status }) => {
-  const [label, cls] = STATUS[status] || [status, ""];
-  return <span className={`font-bold ${cls}`}>{label}</span>;
+  const { t } = useLang();
+  return <span className={`font-bold ${STATUS_STYLE[status] || ""}`}>{STATUS_KEYS[status] ? t(STATUS_KEYS[status]) : status}</span>;
 };
 
 export default function TopUpModal({ open, onOpenChange }) {
   const { authUser } = useAuth();
+  const { t } = useLang();
   const [info, setInfo] = useState(null);
   const [tab, setTab] = useState("skins");
   const [step, setStep] = useState("amount");
@@ -122,7 +132,7 @@ export default function TopUpModal({ open, onOpenChange }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#1e1f23] border-0 text-white sm:max-w-[480px] p-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col" data-testid="topup-dialog">
         <DialogHeader className="px-6 py-4 border-b border-[#2a2b31] shrink-0">
-          <DialogTitle className="text-[17px] font-bold text-left">Пополнение скинами</DialogTitle>
+          <DialogTitle className="text-[17px] font-bold text-left">{t("topup.title")}</DialogTitle>
         </DialogHeader>
 
         <div className="px-6 pt-4 pb-6 space-y-4 overflow-y-auto">
@@ -130,13 +140,13 @@ export default function TopUpModal({ open, onOpenChange }) {
           {mineError && <div className="text-sm text-[#ff8a8a]" data-testid="topup-requests-error">Не удалось загрузить заявки. <button data-testid="topup-requests-retry" onClick={loadMine}>Повторить</button></div>}
           <div className="grid grid-cols-3 rounded-lg bg-[#0f1015] p-1">
             <button onClick={() => setTab("skins")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "skins" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-skins">
-              <BoxesIcon size={14} /> Скины
+              <BoxesIcon size={14} /> {t("topup.skins")}
             </button>
             <button onClick={() => setTab("rubles")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "rubles" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-rubles">
-              ₽ Рубли
+              {t("topup.rubles")}
             </button>
             <button onClick={() => setTab("requests")} className={`h-9 rounded-md flex items-center justify-center gap-2 text-[13px] font-bold transition-colors ${tab === "requests" ? "bg-[#2a2b31] text-white" : "text-[#8e91a3] hover:text-white"}`} data-testid="topup-tab-requests">
-              <FileTextIcon size={14} /> Мои заявки
+              <FileTextIcon size={14} /> {t("topup.requests")}
               {pendingCount > 0 && <span className="h-5 min-w-5 px-1.5 rounded-full bg-[#ffb000] text-black text-[11px] font-black flex items-center justify-center" data-testid="topup-pending-badge">{pendingCount}</span>}
             </button>
           </div>
@@ -152,9 +162,9 @@ export default function TopUpModal({ open, onOpenChange }) {
               onDone={() => { setRap(""); setStep("amount"); loadMine(); setTab("requests"); }}
             />
           )}
-          {tab === "requests" && (authUser ? <MyRequests items={mine} onChanged={loadMine} onNew={() => { setTab("skins"); setStep("amount"); }} /> : <div className="h-[140px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="my-requests-guest">Войдите, чтобы видеть заявки</div>)}
+          {tab === "requests" && (authUser ? <MyRequests items={mine} onChanged={loadMine} onNew={() => { setTab("skins"); setStep("amount"); }} /> : <div className="h-[140px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="my-requests-guest">{t("topup.guest_requests")}</div>)}
 
-          <div className="text-[11px] text-[#5f6377] text-center leading-snug">Проверка обычно занимает до 30 минут. Вопросы — {SUPPORT_URL ? (<a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline">напишите в поддержку{SUPPORT_HANDLE ? ` ${SUPPORT_HANDLE}` : ""}</a>) : "кнопка «Поддержка» внизу сайта"}.</div>
+          <div className="text-[11px] text-[#5f6377] text-center leading-snug">{t("topup.check_30min")} {SUPPORT_URL ? (<a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline">{t("topup.check_support_link")}{SUPPORT_HANDLE ? ` ${SUPPORT_HANDLE}` : ""}</a>) : t("topup.check_support_btn")}.</div>
         </div>
       </DialogContent>
     </Dialog>
