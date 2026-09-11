@@ -6,7 +6,7 @@ import { RefreshCWIcon } from "../components/icons/refresh-cw";
 import { CheckIcon } from "../components/icons/check";
 import { XIcon } from "../components/icons/x";
 import { ExternalLinkIcon } from "../components/icons/external-link";
-import { adminApi, getAdminToken, setAdminToken, formatMoney, DEPOSIT_FEE } from "../lib/api";
+import { adminApi, getAdminToken, setAdminToken, formatMoney, parseServerDate, DEPOSIT_FEE } from "../lib/api";
 import BankTab from "../components/admin/BankTab";
 import PlayersTab from "../components/admin/PlayersTab";
 import RainTab from "../components/admin/RainTab";
@@ -14,12 +14,12 @@ import { DepositAllocationPreview } from "../components/admin/DepositAllocationP
 import { DepositReceipt } from "../components/DepositReceipt";
 
 const waitingFor = (iso) => {
-  const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  const mins = Math.max(0, Math.floor((Date.now() - parseServerDate(iso).getTime()) / 60000));
   if (mins < 60) return `${mins} мин`;
   const h = Math.floor(mins / 60);
   return h < 48 ? `${h} ч ${mins % 60} мин` : `${Math.floor(h / 24)} дн`;
 };
-const fmtDate = (d) => new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 const WORDS = 10;
 const splitWords = (text) => text.trim().split(/[\s,;]+/).filter(Boolean);

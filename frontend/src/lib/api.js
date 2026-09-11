@@ -57,6 +57,14 @@ export const api = {
 export const formatNumber = (n) =>
   new Intl.NumberFormat("ru-RU").format(Math.round(Number(n) || 0));
 
+// Сервер отдаёт даты из Mongo «голыми» (без часового пояса, по факту UTC).
+// Без поправки браузер читает их как локальное время и все часы плывут
+// на смещение зоны (у админа в UTC+5 ожидание стартовало с «5 ч»).
+export const parseServerDate = (d) => {
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(d) && !/(Z|[+-]\d{2}:?\d{2})$/.test(d)) d += "Z";
+  return new Date(d);
+};
+
 export const formatMoney = (n) =>
   new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 

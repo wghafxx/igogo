@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
-import { api, formatMoney } from "../../lib/api";
+import { api, formatMoney, parseServerDate } from "../../lib/api";
 import { DepositStatus } from "../TopUpModal";
 import { DepositReceipt } from "../DepositReceipt";
 
-const fmtDate = (d) => new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function MyRequests({ items, onChanged, onNew }) {
   const [busyId, setBusyId] = useState(null);

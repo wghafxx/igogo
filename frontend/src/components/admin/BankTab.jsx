@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
-import { adminApi, formatMoney } from "../../lib/api";
+import { adminApi, formatMoney, parseServerDate } from "../../lib/api";
 
-const fmtDate = (d) => new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const pct = (v) => `${(Number(v) * 100).toFixed(1)}%`;
 
 const KIND = {

@@ -17,11 +17,11 @@ import Nick from "../components/Nick";
 import { LinkIcon } from "../components/icons/link";
 import { useAuth } from "../hooks/useAuth";
 import { useSessionCtx } from "../hooks/useSessionCtx";
-import { api, formatMoney, inventoryTotal } from "../lib/api";
+import { api, formatMoney, inventoryTotal, parseServerDate } from "../lib/api";
 import { rarityColor } from "../lib/rarity";
 import { DepositReceipt } from "../components/DepositReceipt";
 
-const fmtDate = (d) => new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 const Stat = ({ title, icon: Icon, children, testId }) => (
   <div className="blox-panel p-4 flex flex-col gap-2" data-testid={testId}>

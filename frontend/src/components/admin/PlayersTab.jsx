@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
-import { adminApi, formatMoney } from "../../lib/api";
+import { adminApi, formatMoney, parseServerDate } from "../../lib/api";
 
 const pct = (v) => `${Math.round(Number(v) * 100)}%`;
-const fmtDate = (d) => (d ? new Date(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+const fmtDate = (d) => (d ? parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
 
 const Money = ({ v, tone = "" }) => (
   <span className={`inline-flex items-center gap-1 font-bold ${tone}`}>{formatMoney(v)} <RobuxIcon size={9} /></span>
