@@ -13,7 +13,7 @@ import RubTopUp from "./topup/RubTopUp";
 import MyRequests from "./topup/MyRequests";
 import { SUPPORT_HANDLE } from "./SupportDialog";
 
-const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/bloxgradesupport";
 
 export const PromoInput = ({ compact = false }) => {
   const { authUser, setAuthUser } = useAuth();

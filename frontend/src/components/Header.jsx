@@ -25,7 +25,7 @@ import {
 import TopUpModal from "./TopUpModal";
 import Nick from "./Nick";
 
-const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
+const CHANNEL_URL = "https://t.me/bloxgrade";
 
 const StatBlock = ({ label, value, icon, mobile = false }) => (
   <div className={`${mobile ? "flex" : "hidden md:flex"} items-center gap-2`}>
@@ -110,16 +110,14 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        {SUPPORT_URL && (
-          <AnimButton
-            icon={SendIcon}
-            size={15}
-            className="blox-chip w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white"
-            title="Поддержка в Telegram"
-            onClick={() => window.open(SUPPORT_URL, "_blank", "noopener")}
-            data-testid="telegram-link"
-          />
-        )}
+        <AnimButton
+          icon={SendIcon}
+          size={15}
+          className="blox-chip w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white"
+          title="Наш Telegram"
+          onClick={() => window.open(CHANNEL_URL, "_blank", "noopener")}
+          data-testid="telegram-link"
+        />
         {process.env.REACT_APP_VK_URL && <a
           href={process.env.REACT_APP_VK_URL}
           target="_blank"

@@ -4,7 +4,7 @@ import { RobuxIcon } from "../Logo";
 import { useAuth } from "../../hooks/useAuth";
 import { SUPPORT_HANDLE } from "../SupportDialog";
 
-const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/bloxgradesupport";
 
 // Тариф: 1 RAP = 0,50 ₽. Минимальный платёж — 35 ₽ (70 RAP).
 export const RAP_RUB_RATE = 0.5;

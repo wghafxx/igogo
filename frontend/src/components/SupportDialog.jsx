@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import { SendIcon } from "./icons/send";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 
-export const SUPPORT_HANDLE = process.env.REACT_APP_TELEGRAM_SUPPORT_HANDLE;
-const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
+export const SUPPORT_HANDLE = process.env.REACT_APP_TELEGRAM_SUPPORT_HANDLE || "@bloxgradesupport";
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/bloxgradesupport";
 
 export const SupportDialog = ({ request, onClose }) => {
   const withdrawal = request?.kind === "withdrawal";

@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { SUPPORT_HANDLE } from "../components/SupportDialog";
 
-const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL;
+const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/bloxgradesupport";
 
 const SECTIONS = [
   {
