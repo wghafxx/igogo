@@ -1,11 +1,8 @@
 import React from "react";
 import { useLang } from "../lib/i18n";
 
-export const SKINS_PER_PAGE = 15;
-
 export default function SkinPagination({ page, pages, onChange, disabled, label, testId }) {
   const { t } = useLang();
-  if (pages <= 1) return null;
 
   let numbers;
   if (pages <= 7) numbers = Array.from({ length: pages }, (_, i) => i + 1);
@@ -15,7 +12,7 @@ export default function SkinPagination({ page, pages, onChange, disabled, label,
 
   const buttonClass = "h-8 min-w-7 px-1.5 rounded-md text-[12px] font-bold transition-colors disabled:opacity-40 disabled:cursor-default";
   return (
-    <nav aria-label={label} className="flex items-center justify-center gap-1 px-2 py-3 border-t border-[#262833]" data-testid={testId}>
+    <nav aria-label={label} className="mt-auto shrink-0 flex items-center justify-center gap-1 px-2 py-3 border-t border-[#262833]" data-testid={testId}>
       <button type="button" disabled={disabled || page === 1} onClick={() => onChange(page - 1)} aria-label={t("skins.previous_page")} className={`${buttonClass} text-[#8e91a3] hover:bg-[#262833]`} data-testid={`${testId}-previous`}>‹</button>
       {numbers.map((number, i) => typeof number === "number" ? (
         <button
