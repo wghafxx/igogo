@@ -377,16 +377,17 @@ class TestAdminAuthIsolated:
 
 # ---------- Live public read-only checks ----------
 class TestPublicLiveEndpoints:
-    def test_shop_20_items_and_search_safety(self):
+    def test_shop_items_and_search_safety(self):
         r = requests.get(f"{API}/shop", timeout=30)
         assert r.status_code == 200, r.text
         items = r.json()["items"]
-        assert len(items) == 20
+        assert len(items) == 24
         got = {(i["name"], float(i["price"])) for i in items}
         expected = {
             ("Lionheart", 40.0), ("Finishline Case", 39.0), ("Imperial", 11299.0), ("Aztec", 4250.0),
             ("Reinforced", 3600.0), ("Bumblebee", 3050.0), ("Gator", 1699.0), ("Safari", 3500.0),
             ("Safari", 3000.0), ("Safari", 2200.0), ("Rusted", 2000.0), ("Rusted", 1773.0),
+            ("Typhon", 110.0), ("Railgun", 152.0), ("Orchids", 242.0), ("Aniki", 299.0),
         }
         assert expected.issubset(got)
         assert requests.get(f"{API}/shop", params={"q": "["}, timeout=30).status_code == 200

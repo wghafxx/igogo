@@ -229,7 +229,7 @@ class TestAdminEndpoints:
     def test_deposit_confirm_reject_unknown_id(self, h):
         r = requests.post(f"{BASE_URL}/admin/deposits/{uuid.uuid4()}/confirm", json={"rap": 100}, headers=h, timeout=30)
         assert r.status_code == 404, r.text
-        r = requests.post(f"{BASE_URL}/admin/deposits/{uuid.uuid4()}/reject", json={}, headers=h, timeout=30)
+        r = requests.post(f"{BASE_URL}/admin/deposits/{uuid.uuid4()}/reject", json={"reason": "no_reason"}, headers=h, timeout=30)
         assert r.status_code == 404, r.text
 
     def test_confirm_validation(self, h):

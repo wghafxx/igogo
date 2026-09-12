@@ -262,9 +262,9 @@ class TestDeposits:
         mongo.deposits.delete_many({"session_id": DEP_SID})
         dep = requests.post(f"{API}/deposits", headers=h(tok_dep), json={"description": "TEST_reject"}, timeout=20).json()
         bal_before = requests.get(f"{API}/auth/me", headers=h(tok_dep), timeout=20).json()["balance"]
-        r = requests.post(f"{API}/admin/deposits/{dep['id']}/reject", headers=h(admin_token), timeout=20)
+        r = requests.post(f"{API}/admin/deposits/{dep['id']}/reject", json={"reason": "no_reason"}, headers=h(admin_token), timeout=20)
         assert r.status_code == 200, r.text[:300]
-        assert requests.post(f"{API}/admin/deposits/{dep['id']}/reject", headers=h(admin_token), timeout=20).status_code == 404
+        assert requests.post(f"{API}/admin/deposits/{dep['id']}/reject", json={"reason": "no_reason"}, headers=h(admin_token), timeout=20).status_code == 404
         bal_after = requests.get(f"{API}/auth/me", headers=h(tok_dep), timeout=20).json()["balance"]
         assert abs(bal_after - bal_before) < 0.01, "reject must not credit balance"
         rej = requests.get(f"{API}/admin/deposits?status=rejected", headers=h(admin_token), timeout=20).json()
@@ -278,7 +278,7 @@ class TestDeposits:
         dep = requests.post(f"{API}/deposits", headers=h(tok_dep), json={"description": "TEST_neg"}, timeout=20).json()
         r = requests.post(f"{API}/admin/deposits/{dep['id']}/confirm", headers=h(admin_token), json={"amount": -5}, timeout=20)
         assert r.status_code == 422, r.status_code
-        requests.post(f"{API}/admin/deposits/{dep['id']}/reject", headers=h(admin_token), timeout=20)
+        requests.post(f"{API}/admin/deposits/{dep['id']}/reject", json={"reason": "no_reason"}, headers=h(admin_token), timeout=20)
 
 
 # ---------------- Withdrawals admin flow ----------------

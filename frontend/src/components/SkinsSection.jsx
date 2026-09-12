@@ -5,6 +5,7 @@ import { Logo, RobuxIcon } from "./Logo";
 import AnimButton from "./AnimButton";
 import DiscordButton from "./DiscordButton";
 import SkinShowcase from "./SkinShowcase";
+import SkinPagination, { SKINS_PER_PAGE } from "./SkinPagination";
 import { SearchIcon } from "./icons/search";
 import { WalletIcon } from "./icons/wallet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -108,39 +109,49 @@ const GuestInventory = ({ t, onLogin }) => (
   </div>
 );
 
-const UserInventory = ({ t, skins, onTopUp, selectedUids, onToggle, disabled }) => (
-  <div className="relative p-2 pt-0" data-testid="user-inventory">
-    {skins.length > 0 ? (
-      <div className={GRID}>
-        {skins.map((s, i) => (
-          <SkinCard key={s.uid || `${s.id || s.name}-${i}`} item={s} disabled={disabled} testId={`bet-card-${s.uid}`} selected={selectedUids.includes(s.uid)} onClick={() => onToggle(s)} />
-        ))}
-      </div>
-    ) : (
-      <>
-        <div className={`${GRID} blur-[3px] opacity-50 pointer-events-none select-none`}>
-          {Array.from({ length: 15 }).map((_, i) => (
-            <EmptySlot key={i} />
-          ))}
-        </div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-[#0d0e12] rounded-xl px-7 py-5 text-center shadow-[0_10px_40px_rgba(0,0,0,0.6)]" data-testid="topup-skins-card">
-            <div className="font-bold text-[14px] mb-3">{t("skins.topup_skins")}</div>
-            <AnimButton
-              icon={WalletIcon}
-              size={14}
-              className="h-9 px-5 rounded-lg border border-[#00a2ff] text-[#00a2ff] font-bold text-[13px] flex items-center gap-2 mx-auto hover:bg-[#00a2ff]/10 transition-colors"
-              onClick={onTopUp}
-              data-testid="topup-skins-button"
-            >
-              {t("skins.topup")}
-            </AnimButton>
+const UserInventory = ({ t, skins, onTopUp, selectedUids, onToggle, disabled }) => {
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(skins.length / SKINS_PER_PAGE));
+  const currentPage = Math.min(page, pages);
+  useEffect(() => { setPage((current) => Math.min(current, pages)); }, [pages]);
+  const visibleSkins = skins.slice((currentPage - 1) * SKINS_PER_PAGE, currentPage * SKINS_PER_PAGE);
+  return (
+    <div className="relative p-2 pt-0" data-testid="user-inventory">
+      {skins.length > 0 ? (
+        <>
+          <div className={GRID}>
+            {visibleSkins.map((s, i) => (
+              <SkinCard key={s.uid || `${s.id || s.name}-${i}`} item={s} disabled={disabled} testId={`bet-card-${s.uid}`} selected={selectedUids.includes(s.uid)} onClick={() => onToggle(s)} />
+            ))}
           </div>
-        </div>
-      </>
-    )}
-  </div>
-);
+          <SkinPagination page={currentPage} pages={pages} onChange={setPage} label={t("skins.mine_pages")} testId="inventory-pagination" />
+        </>
+      ) : (
+        <>
+          <div className={`${GRID} blur-[3px] opacity-50 pointer-events-none select-none`}>
+            {Array.from({ length: 15 }).map((_, i) => (
+              <EmptySlot key={i} />
+            ))}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-[#0d0e12] rounded-xl px-7 py-5 text-center shadow-[0_10px_40px_rgba(0,0,0,0.6)]" data-testid="topup-skins-card">
+              <div className="font-bold text-[14px] mb-3">{t("skins.topup_skins")}</div>
+              <AnimButton
+                icon={WalletIcon}
+                size={14}
+                className="h-9 px-5 rounded-lg border border-[#00a2ff] text-[#00a2ff] font-bold text-[13px] flex items-center gap-2 mx-auto hover:bg-[#00a2ff]/10 transition-colors"
+                onClick={onTopUp}
+                data-testid="topup-skins-button"
+              >
+                {t("skins.topup")}
+              </AnimButton>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 export default function SkinsSection({ onTopUp, user, target, onSelectTarget, betSkins = [], onToggleBetSkin, sound, disabled }) {
   const { authUser, openAuth } = useAuth();
@@ -151,6 +162,8 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [items, setItems] = useState([]);
+  const [shopPage, setShopPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retry, setRetry] = useState(0);
@@ -161,20 +174,30 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
     let alive = true;
     setLoading(true);
     setError(null);
-    const params = { sort };
+    const params = { sort, page: shopPage, limit: SKINS_PER_PAGE };
     if (minPrice !== "" && Number.isFinite(Number(minPrice))) params.min_price = Number(minPrice);
     if (maxPrice !== "" && Number.isFinite(Number(maxPrice))) params.max_price = Number(maxPrice);
     if (query) params.q = query;
     const timer = setTimeout(() => api
       .shop(params)
-      .then((d) => alive && setItems(d.items || []))
-      .catch(() => { if (alive) { setItems([]); setError(t("skins.catalog_fail")); } })
+      .then((d) => {
+        if (!alive) return;
+        setItems(d.items || []);
+        setTotalItems(d.total || 0);
+        setShopPage(d.page || 1);
+      })
+      .catch(() => { if (alive) { setItems([]); setError(true); } })
       .finally(() => { if (alive) setLoading(false); }), 200);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [sort, minPrice, maxPrice, query, retry]);
+  }, [sort, minPrice, maxPrice, query, retry, shopPage]);
+
+  const changeFilter = (setter, value) => {
+    setter(value);
+    setShopPage(1);
+  };
 
   const openSearch = () => {
     setSearchOpen(true);
@@ -184,7 +207,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
     if (!query) setSearchOpen(false);
   };
 
-  const sorted = [...items].sort((a, b) => (sort === "price_asc" ? a.price - b.price : b.price - a.price));
+  const shopPages = Math.max(1, Math.ceil(totalItems / SKINS_PER_PAGE));
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-6 mt-4 sm:mt-5 fade-up" data-testid="skins-section">
@@ -202,6 +225,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
         </PanelHeader>
         {authUser ? (
           <UserInventory
+            key={user?.session_id || "inventory"}
             t={t}
             disabled={disabled}
             skins={user?.skins || []}
@@ -220,7 +244,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
       <div className={`blox-panel overflow-hidden ${mobileTab === "shop" ? "" : "hidden lg:block"}`} data-testid="shop-panel">
         <PanelHeader title={t("skins.shop")}>
           <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-2 min-w-0">
-            <Select value={sort} onValueChange={setSort}>
+            <Select value={sort} onValueChange={(value) => changeFilter(setSort, value)}>
               <SelectTrigger className="h-8 w-[100px] shrink-0 bg-[#0f1015] border-0 text-[12px] text-white focus:ring-0" data-testid="sort-select">
                 <div className="flex items-center gap-1.5">
                   {sort === "price_desc" ? <TrendingDownIcon size={13} className="text-[#7d8194]" /> : <TrendingUpIcon size={13} className="text-[#7d8194]" />}
@@ -237,8 +261,8 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
               className={`flex items-center gap-2 overflow-hidden transition-[max-width,opacity] duration-300 ease-out ${searchOpen ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"}`}
               data-testid="price-filters"
             >
-              <PriceInput value={minPrice} onChange={setMinPrice} placeholder={t("skins.from")} ariaLabel={t("skins.min_price")} testId="min-price-input" />
-              <PriceInput value={maxPrice} onChange={setMaxPrice} placeholder={t("skins.to")} ariaLabel={t("skins.max_price")} testId="max-price-input" />
+              <PriceInput value={minPrice} onChange={(value) => changeFilter(setMinPrice, value)} placeholder={t("skins.from")} ariaLabel={t("skins.min_price")} testId="min-price-input" />
+              <PriceInput value={maxPrice} onChange={(value) => changeFilter(setMaxPrice, value)} placeholder={t("skins.to")} ariaLabel={t("skins.max_price")} testId="max-price-input" />
             </div>
 
             <div
@@ -257,7 +281,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
                 value={query}
                 maxLength={100}
                 aria-label={t("skins.search")}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => changeFilter(setQuery, e.target.value)}
                 onBlur={closeSearch}
                 placeholder={t("skins.search")}
                 className={`h-8 bg-transparent text-[12px] text-white placeholder:text-[#5f6377] outline-none pr-2 transition-opacity duration-200 ${searchOpen ? "w-full opacity-100" : "w-0 opacity-0"}`}
@@ -267,8 +291,8 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
           </div>
         </PanelHeader>
         <div className={`p-2 pt-0 ${GRID}`} data-testid="shop-grid">
-          {loading ? <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-loading">{t("skins.loading")}</div> : error ? <div className="col-span-full py-10 text-center text-sm" data-testid="shop-error">{error}<button className="block mx-auto mt-3 text-[#00a2ff]" data-testid="shop-retry" onClick={() => setRetry((v) => v + 1)}>{t("skins.retry")}</button></div> : sorted.length > 0
-            ? sorted.map((it) => (
+          {loading ? <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-loading">{t("skins.loading")}</div> : error ? <div className="col-span-full py-10 text-center text-sm" data-testid="shop-error">{t("skins.catalog_fail")}<button className="block mx-auto mt-3 text-[#00a2ff]" data-testid="shop-retry" onClick={() => setRetry((v) => v + 1)}>{t("skins.retry")}</button></div> : items.length > 0
+            ? items.map((it) => (
                 <SkinCard
                   key={it.id || it.name}
                   item={it}
@@ -283,6 +307,7 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, be
               ))
             : <div className="col-span-full py-10 text-center text-sm text-[#8e91a3]" data-testid="shop-empty">{t("skins.empty")}</div>}
         </div>
+        {!error && <SkinPagination page={shopPage} pages={shopPages} onChange={setShopPage} disabled={loading} label={t("skins.shop_pages")} testId="shop-pagination" />}
       </div>
     </section>
   );

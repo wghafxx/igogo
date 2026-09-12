@@ -16,7 +16,7 @@ import secrets
 from collections import deque
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Literal, Optional
 from urllib.parse import urlencode
 import uuid
 import hashlib
@@ -101,6 +101,10 @@ SHOP_ITEMS = [
     {"id": "case-chrysalis", "type": "Case", "name": "Chrysalis", "price": 44.0, "rarity": "red", "image": f"{IMG}/134467311250667.png"},
     {"id": "case-glove-case-2", "type": "Case", "name": "Glove Case 2", "price": 50.0, "rarity": "red", "image": f"{IMG}/75374128985311.png"},
     {"id": "case-1", "type": "Case", "name": "Case #1", "price": 88.0, "rarity": "red", "image": f"{IMG}/103053431273169.png"},
+    {"id": "awp-typhon", "type": "AWP", "name": "Typhon", "price": 110.0, "rarity": "pink", "image": f"{IMG}/136191452368563.png"},
+    {"id": "awp-railgun", "type": "AWP", "name": "Railgun", "price": 152.0, "rarity": "pink", "image": f"{IMG}/124999883032205.png"},
+    {"id": "m4a1s-orchids", "type": "M4A1-S", "name": "Orchids", "price": 242.0, "rarity": "red", "image": f"{IMG}/118636080343193.png"},
+    {"id": "ak47-aniki", "type": "AK-47", "name": "Aniki", "price": 299.0, "rarity": "purple", "image": f"{IMG}/83000635050744.png"},
     {"id": "package-glock-midas", "type": "Package | Glock-18", "name": "Midas", "price": 396.0, "rarity": "red", "image": f"{IMG}/126726654780672.png"},
     {"id": "package-tec9-medal", "type": "Package | Tec-9", "name": "Medal.tv", "price": 832.0, "rarity": "red", "image": f"{IMG}/71231444746781.png"},
     {"id": "awp-bird-hunt", "type": "AWP", "name": "Bird Hunt", "price": 1125.0, "rarity": "red", "image": f"{IMG}/91355488643704.png"},
@@ -178,6 +182,10 @@ class AdminLoginIn(BaseModel):
 class AdminConfirmIn(InputModel):
     rap: float = Field(gt=0, le=1_000_000)
     note: Optional[str] = Field(default=None, max_length=200)
+
+
+class AdminRejectIn(InputModel):
+    reason: Literal["illiquid_skin", "yellow_tag", "no_reason"]
 
 
 class BankSettingsIn(InputModel):
@@ -1176,9 +1184,12 @@ async def admin_deposit_preview(deposit_id: str, payload: AdminConfirmIn, reques
 
 
 @api_router.post("/admin/deposits/{deposit_id}/reject")
-async def admin_reject_deposit(deposit_id: str, request: Request):
+async def admin_reject_deposit(deposit_id: str, payload: AdminRejectIn, request: Request):
     await require_admin(request)
-    res = await db.deposits.update_one({"id": deposit_id, "status": "pending"}, {"$set": {"status": "rejected", "resolved_at": now_utc()}})
+    res = await db.deposits.update_one(
+        {"id": deposit_id, "status": "pending"},
+        {"$set": {"status": "rejected", "rejection_reason": payload.reason, "resolved_at": now_utc()}},
+    )
     if not res.matched_count:
         raise HTTPException(status_code=404, detail="Заявка не найдена или уже обработана")
     return {"ok": True}
@@ -1451,6 +1462,7 @@ async def shop(
     q: Optional[str] = Query(default=None, max_length=100),
     rarity: Optional[str] = None,
     limit: int = 60,
+    page: int = Query(default=1, ge=1),
 ):
     query: dict = {}
     if min_price is not None or max_price is not None:
@@ -1465,8 +1477,12 @@ async def shop(
     if rarity:
         query["rarity"] = rarity
     direction = 1 if sort == "price_asc" else -1
-    docs = await db.shop_items.find(query, {"_id": 0}).sort("price", direction).to_list(max(1, min(limit, 200)))
-    return {"items": docs, "total": await db.shop_items.count_documents(query)}
+    page_size = max(1, min(limit, 200))
+    total = await db.shop_items.count_documents(query)
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    docs = await db.shop_items.find(query, {"_id": 0}).sort([("price", direction), ("id", 1)]).skip((page - 1) * page_size).to_list(page_size)
+    return {"items": docs, "total": total, "page": page, "pages": pages}
 
 
 @api_router.post("/upgrade", response_model=UpgradeOut)

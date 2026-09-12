@@ -41,6 +41,11 @@ export default function MyRequests({ items, onChanged, onNew }) {
               <span className="ml-auto"><DepositStatus status={d.status} /></span>
             </div>
             <div className="text-[12px] text-[#b4b7c7] break-words" data-testid="my-request-description">{d.description}</div>
+            {d.status === "rejected" && d.rejection_reason && (
+              <div className="text-[12px] text-[#ff8a8a] break-words" data-testid="my-request-rejection-reason">
+                {t("requests.rejection_reason")}: {t(`requests.rejection_${d.rejection_reason}`)}
+              </div>
+            )}
             <div className="flex items-center gap-2 text-[11px] text-[#8e91a3]">
               <span>{fmtDate(d.created_at, lang)}</span>
               {d.status === "pending" && (

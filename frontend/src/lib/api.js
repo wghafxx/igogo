@@ -91,7 +91,7 @@ export const adminApi = {
   deposits: (status) => adminHttp.get(`/admin/deposits`, { params: { status } }).then((r) => r.data),
   confirm: (id, rap, note) => adminHttp.post(`/admin/deposits/${id}/confirm`, { rap, note }).then((r) => r.data),
   depositPreview: (id, rap) => adminHttp.post(`/admin/deposits/${id}/preview`, { rap }).then((r) => r.data),
-  reject: (id) => adminHttp.post(`/admin/deposits/${id}/reject`).then((r) => r.data),
+  reject: (id, reason) => adminHttp.post(`/admin/deposits/${id}/reject`, { reason }).then((r) => r.data),
   withdrawals: (status) => adminHttp.get(`/admin/withdrawals`, { params: { status } }).then((r) => r.data),
   withdrawalDone: (id) => adminHttp.post(`/admin/withdrawals/${id}/done`).then((r) => r.data),
   bank: () => adminHttp.get(`/admin/bank`).then((r) => r.data),
@@ -106,3 +106,9 @@ export const adminApi = {
 };
 
 export const DEPOSIT_FEE = 0.2;
+
+export const DEPOSIT_REJECTION_REASONS = {
+  illiquid_skin: "Неликвидный скин",
+  yellow_tag: "Жёлтая табличка на скине",
+  no_reason: "Без причины",
+};

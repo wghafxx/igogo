@@ -6,7 +6,8 @@ import { RefreshCWIcon } from "../components/icons/refresh-cw";
 import { CheckIcon } from "../components/icons/check";
 import { XIcon } from "../components/icons/x";
 import { ExternalLinkIcon } from "../components/icons/external-link";
-import { adminApi, getAdminToken, setAdminToken, formatMoney, parseServerDate, DEPOSIT_FEE } from "../lib/api";
+import { adminApi, getAdminToken, setAdminToken, formatMoney, parseServerDate, DEPOSIT_FEE, DEPOSIT_REJECTION_REASONS } from "../lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import BankTab from "../components/admin/BankTab";
 import PlayersTab from "../components/admin/PlayersTab";
 import RainTab from "../components/admin/RainTab";
@@ -193,6 +194,8 @@ export default function AdminPage() {
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [rejectDeposit, setRejectDeposit] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
   const currentTab = useRef(tab);
   currentTab.current = tab;
 
@@ -236,8 +239,10 @@ export default function AdminPage() {
       await fn();
       toast.success(msg);
       load();
+      return true;
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Ошибка");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -303,7 +308,7 @@ export default function AdminPage() {
                 d={d}
                 busy={busy}
                 onConfirm={(id, rap, note) => run(() => adminApi.confirm(id, rap, note), "Депозит обработан: скины в инвентаре, остаток на балансе")}
-                onReject={(id) => run(() => adminApi.reject(id), "Заявка отклонена")}
+                onReject={() => { setRejectReason(""); setRejectDeposit(d); }}
               />
             ))}
 
@@ -315,6 +320,11 @@ export default function AdminPage() {
                 <span className="flex-1 min-w-[200px] text-[#b4b7c7] truncate">{d.description}</span>
                 {d.expected_rap > 0 && <span className="text-[11px] text-[#8e91a3]">заявлено {formatMoney(d.expected_rap)} RAP{d.receiver_nick ? ` → ${d.receiver_nick}` : ""}</span>}
                 {tab === "confirmed" && <DepositReceipt deposit={d} compact testId={`admin-deposit-receipt-${d.id}`} />}
+                {tab === "rejected" && d.rejection_reason && (
+                  <span className="text-[#ff8a8a]" data-testid="admin-deposit-rejection-reason">
+                    Причина: {DEPOSIT_REJECTION_REASONS[d.rejection_reason] || d.rejection_reason}
+                  </span>
+                )}
                 <span className="text-[#5f6377] w-24 text-right">{fmtDate(d.resolved_at || d.created_at)}</span>
               </div>
             ))}
@@ -337,6 +347,39 @@ export default function AdminPage() {
         </div>
         )}
       </main>
+      <Dialog open={Boolean(rejectDeposit)} onOpenChange={(open) => { if (!open && !busy) setRejectDeposit(null); }}>
+        <DialogContent className="bg-[#1e1f23] border-0 text-white max-w-[calc(100%-2rem)] sm:max-w-[420px] rounded-xl" data-testid="admin-reject-dialog" aria-describedby="admin-reject-description">
+          <DialogHeader>
+            <DialogTitle>Отклонить пополнение</DialogTitle>
+            <DialogDescription className="text-[#8e91a3]">
+              <span id="admin-reject-description">Выберите причину отклонения заявки игрока {rejectDeposit?.nickname}. Игрок увидит её в своих заявках.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <fieldset disabled={busy} className="space-y-2">
+            <legend className="text-[12px] text-[#8e91a3] mb-2">Причина отклонения</legend>
+            {Object.entries(DEPOSIT_REJECTION_REASONS).map(([value, label]) => (
+              <label key={value} className={`flex items-center gap-3 px-3 py-3 rounded-lg bg-[#0f1015] text-[13px] cursor-pointer ${rejectReason === value ? "ring-1 ring-[#ff5c5c]" : ""}`}>
+                <input type="radio" name="deposit-rejection-reason" value={value} checked={rejectReason === value} onChange={() => setRejectReason(value)} className="accent-[#ff5c5c]" data-testid={`admin-reject-reason-${value}`} />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setRejectDeposit(null)} disabled={busy} className="blox-chip h-10 px-4 text-[12px] font-bold text-[#9a9db0] disabled:opacity-40" data-testid="admin-reject-cancel">Отмена</button>
+            <button
+              onClick={async () => {
+                if (!rejectDeposit || !rejectReason || busy) return;
+                if (await run(() => adminApi.reject(rejectDeposit.id, rejectReason), "Заявка отклонена")) setRejectDeposit(null);
+              }}
+              disabled={busy || !rejectReason}
+              className="flex-1 h-10 px-3 rounded-lg bg-[#ff5c5c] hover:bg-[#ff7373] text-white font-bold text-[12px] disabled:opacity-40 transition-colors"
+              data-testid="admin-reject-confirm"
+            >
+              {busy ? "Отклонение…" : "Отклонить пополнение"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
