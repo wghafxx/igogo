@@ -73,7 +73,7 @@ export const formatMoney = (n) =>
 
 export const inventoryTotal = (skins) => (skins || []).reduce((a, s) => a + Number(s.price || 0), 0);
 
-export const pct = (frac) => String(Math.round(Number(frac || 0) * 1000) / 10).replace(".", ",");
+export const pct = (frac) => String(Math.round(Number(frac || 0) * 10000) / 100).replace(".", ",");
 
 const ADMIN_KEY = "bloxgrade_admin_token";
 export const getAdminToken = () => sessionStorage.getItem(ADMIN_KEY);
@@ -89,6 +89,10 @@ export const adminApi = {
   login: (phrases) => adminHttp.post(`/admin/login`, { phrases }).then((r) => r.data),
   logout: () => adminHttp.post(`/admin/logout`).then((r) => r.data),
   session: () => adminHttp.get(`/admin/session`).then((r) => r.data),
+  promos: () => adminHttp.get(`/admin/promos`).then((r) => r.data),
+  createPromo: (payload) => adminHttp.post(`/admin/promos`, payload).then((r) => r.data),
+  updatePromo: (id, payload) => adminHttp.put(`/admin/promos/${encodeURIComponent(id)}`, payload).then((r) => r.data),
+  deletePromo: (id) => adminHttp.delete(`/admin/promos/${encodeURIComponent(id)}`).then((r) => r.data),
   deposits: (status) => adminHttp.get(`/admin/deposits`, { params: { status } }).then((r) => r.data),
   confirm: (id, rap, note) => adminHttp.post(`/admin/deposits/${id}/confirm`, { rap, note }).then((r) => r.data),
   depositPreview: (id, rap) => adminHttp.post(`/admin/deposits/${id}/preview`, { rap }).then((r) => r.data),

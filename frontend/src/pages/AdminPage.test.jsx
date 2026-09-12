@@ -7,7 +7,7 @@ jest.mock("@/lib/utils", () => jest.requireActual("../lib/utils"), { virtual: tr
 jest.mock("../lib/api", () => ({
   ...jest.requireActual("../lib/api"),
   getAdminToken: () => "test-admin",
-  adminApi: { session: jest.fn(), deposits: jest.fn(), reject: jest.fn() },
+  adminApi: { session: jest.fn(), deposits: jest.fn(), reject: jest.fn(), promos: jest.fn() },
 }));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("../components/admin/BankTab", () => () => null);
@@ -24,6 +24,7 @@ beforeEach(async () => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.clearAllMocks();
   adminApi.session.mockResolvedValue({ ok: true });
+  adminApi.promos.mockResolvedValue([{ id: "pelmen", code: "PELMEN", percent: 10, unique_users: 2 }]);
   adminApi.deposits.mockResolvedValue([{
     id: "deposit-1", nickname: "Player", status: "pending", expected_rap: 100,
     description: "Skin", created_at: "2026-09-12T00:00:00Z",
@@ -72,4 +73,14 @@ test("failed rejection keeps the selected reason for retry", async () => {
   expect(byId("admin-reject-dialog")).not.toBeNull();
   expect(byId("admin-reject-reason-yellow_tag").checked).toBe(true);
   expect(byId("admin-reject-confirm").disabled).toBe(false);
+});
+
+test("promo tab loads promo statistics without requesting deposit statuses", async () => {
+  adminApi.deposits.mockClear();
+  await click("admin-tab-promos");
+  expect(byId("promos-table").textContent).toContain("PELMEN");
+  expect(byId("promo-unique-users").textContent).toBe("2");
+  expect(adminApi.deposits).not.toHaveBeenCalled();
+  await click("admin-refresh-button");
+  expect(adminApi.promos).toHaveBeenCalledTimes(2);
 });

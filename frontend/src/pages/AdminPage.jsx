@@ -6,11 +6,12 @@ import { RefreshCWIcon } from "../components/icons/refresh-cw";
 import { CheckIcon } from "../components/icons/check";
 import { XIcon } from "../components/icons/x";
 import { ExternalLinkIcon } from "../components/icons/external-link";
-import { adminApi, getAdminToken, setAdminToken, formatMoney, parseServerDate, DEPOSIT_FEE, DEPOSIT_REJECTION_REASONS } from "../lib/api";
+import { adminApi, getAdminToken, setAdminToken, formatMoney, parseServerDate, pct, DEPOSIT_FEE, DEPOSIT_REJECTION_REASONS } from "../lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import BankTab from "../components/admin/BankTab";
 import PlayersTab from "../components/admin/PlayersTab";
 import RainTab from "../components/admin/RainTab";
+import PromosTab from "../components/admin/PromosTab";
 import { DepositAllocationPreview } from "../components/admin/DepositAllocationPreview";
 import { DepositReceipt } from "../components/DepositReceipt";
 
@@ -140,7 +141,7 @@ const DepositRow = ({ d, onConfirm, onReject, busy }) => {
           ) : (
             <span className="text-[11px] text-[#ff9b9b]">Roblox-ник не указан</span>
           )}
-          {d.promo_bonus > 0 && <span className="text-[11px] text-[#ffb000] bg-[#ffb000]/15 rounded px-1.5 py-0.5">промо +{Math.round(d.promo_bonus * 100)}%</span>}
+          {d.promo_bonus > 0 && <span className="text-[11px] text-[#ffb000] bg-[#ffb000]/15 rounded px-1.5 py-0.5">промо +{pct(d.promo_bonus)}%</span>}
           {d.expected_rap > 0 && <span className="text-[11px] text-[#2ecc71] bg-[#2ecc71]/15 rounded px-1.5 py-0.5" data-testid="admin-deposit-expected">заявлено {formatMoney(d.expected_rap)} RAP</span>}
           {d.receiver_nick && <span className="text-[11px] text-[#b4b7c7] bg-[#1c1d25] rounded px-1.5 py-0.5" data-testid="admin-deposit-receiver">→ {d.receiver_nick}</span>}
         </div>
@@ -165,7 +166,7 @@ const DepositRow = ({ d, onConfirm, onReject, busy }) => {
         {rap >= 35 && (
           <div className="text-[11px] text-[#8e91a3] px-1" data-testid="admin-credit-preview">
             {formatMoney(rap)} − 20% = {formatMoney(net)}
-            {d.promo_bonus > 0 && <> → +{Math.round(d.promo_bonus * 100)}% промо = <b className="text-[#2ecc71]">{formatMoney(credited)}</b></>}
+            {d.promo_bonus > 0 && <> → +{pct(d.promo_bonus)}% промо = <b className="text-[#2ecc71]">{formatMoney(credited)}</b></>}
           </div>
         )}
         <DepositAllocationPreview depositId={d.id} rap={rap} onReady={setAllocationReady} />
@@ -201,7 +202,7 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      if (tab === "bank" || tab === "players") return;
+      if (["bank", "players", "rain", "promos"].includes(tab)) return;
       const result = tab === "withdrawals" ? await adminApi.withdrawals("pending") : await adminApi.deposits(tab);
       if (currentTab.current === tab) setRows(result);
     } catch (e) {
@@ -277,6 +278,7 @@ export default function AdminPage() {
               ["withdrawals", "Выводы скинов"],
               ["bank", "Банк"],
               ["players", "Игроки"],
+              ["promos", "Промокоды"],
               ["rain", "Удача"],
             ].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`admin-tab-${k}`}>
@@ -296,8 +298,9 @@ export default function AdminPage() {
         {tab === "bank" && <BankTab refreshKey={refreshKey} />}
         {tab === "players" && <PlayersTab refreshKey={refreshKey} />}
         {tab === "rain" && <RainTab refreshKey={refreshKey} />}
+        {tab === "promos" && <PromosTab refreshKey={refreshKey} />}
 
-        {tab !== "bank" && tab !== "players" && tab !== "rain" && (
+        {!["bank", "players", "rain", "promos"].includes(tab) && (
         <div className="space-y-3" data-testid="admin-list">
           {rows.length === 0 && <div className="blox-panel h-[160px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="admin-empty">Пусто</div>}
 

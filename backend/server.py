@@ -14,6 +14,7 @@ import random
 import re
 import secrets
 from collections import deque
+from decimal import Decimal
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Literal, Optional
@@ -24,6 +25,7 @@ import hmac
 from functools import wraps
 from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
 from shop_purchase import purchase_skins
+from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
 import time
 import bcrypt
 import httpx
@@ -170,6 +172,11 @@ class PromoIn(InputModel):
     code: str = Field(min_length=1, max_length=32)
 
 
+class AdminPromoIn(InputModel):
+    code: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    percent: Decimal = Field(gt=0, le=50, decimal_places=2)
+
+
 class DepositIn(InputModel):
     description: str = Field(min_length=3, max_length=300)
     expected_rap: float = Field(ge=35, le=1_000_000)
@@ -302,7 +309,7 @@ async def get_or_create_user(session_id: str) -> dict:
         for sk in skins:
             sk.setdefault("uid", str(uuid.uuid4()))
         await db.users.update_one({"session_id": session_id}, {"$set": {"skins": skins}})
-    return user
+    return await refresh_user_promo(db, user)
 
 
 async def count_online() -> int:
@@ -381,8 +388,6 @@ async def record_admin_fail(ip: str) -> None:
             await db.login_attempts.update_one({"identifier": key}, {"$inc": {"fails": 1}})
 
 
-PROMO_CODES = {"SINZUKU": 0.10, "XYIPACHOSIK": 0.067}
-GOLD_PROMOS = {"XYIPACHOSIK"}
 DEPOSIT_FEE = 0.20
 MIN_DEPOSIT_RAP = 35
 DEPOSIT_COOLDOWN_SECONDS = 60
@@ -397,7 +402,7 @@ async def require_user(request: Request) -> dict:
     user = await db.users.find_one({"session_id": session_id}, {"_id": 0}) if session_id else None
     if not user:
         raise HTTPException(status_code=401, detail="Не авторизован")
-    return user
+    return await refresh_user_promo(db, user)
 
 
 def serialized_user_action(fn):
@@ -909,13 +914,7 @@ async def discord_callback(request: Request, code: Optional[str] = None, state: 
 
 @api_router.get("/auth/me", response_model=UserOut)
 async def auth_me(request: Request):
-    session_id = read_token(request)
-    if not session_id:
-        raise HTTPException(status_code=401, detail="Не авторизован")
-    user = await db.users.find_one({"session_id": session_id}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=401, detail="Не авторизован")
-    return to_user_out(user)
+    return to_user_out(await require_user(request))
 
 
 @api_router.post("/auth/logout")
@@ -933,13 +932,14 @@ async def deposit_info():
 async def promo_apply(payload: PromoIn, request: Request):
     user = await require_user(request)
     code = payload.code.strip().upper()
-    bonus = PROMO_CODES.get(code)
-    if bonus is None:
+    promo = await db.promo_codes.find_one({"code": code, "deleted": False}, {"_id": 0})
+    if promo is None:
         raise HTTPException(status_code=400, detail="Промокод не найден")
-    changes = {"promo_code": code, "promo_bonus": bonus}
-    if code in GOLD_PROMOS:
+    changes = promo_fields(promo)
+    if promo.get("gold_nick"):
         changes["gold_nick"] = True
     await db.users.update_one({"session_id": user["session_id"]}, {"$set": changes})
+    await record_activation(db, promo["id"], user)
     user.update(changes)
     return to_user_out(user)
 
@@ -1087,6 +1087,7 @@ async def create_deposit(payload: DepositIn, request: Request):
         "expected_rap": round(payload.expected_rap, 2),
         "receiver_id": receiver["id"],
         "receiver_nick": receiver["nickname"],
+        "promo_id": user.get("promo_id"),
         "promo_code": user.get("promo_code"),
         "promo_bonus": float(user.get("promo_bonus") or 0),
         "status": "pending",
@@ -1118,6 +1119,61 @@ async def my_deposits(request: Request):
 
 
 # ---------- Admin ----------
+@api_router.get("/admin/promos")
+async def admin_promos(request: Request):
+    await require_admin(request)
+    promos = await db.promo_codes.find({"deleted": False}, {"_id": 0}).sort("created_at", -1).to_list(None)
+    counts = {row["_id"]: row["count"] async for row in db.promo_activations.aggregate([
+        {"$match": {"promo_id": {"$in": [p["id"] for p in promos]}}},
+        {"$group": {"_id": "$promo_id", "count": {"$sum": 1}}},
+    ])}
+    return [{**p, "unique_users": counts.get(p["id"], 0)} for p in promos]
+
+
+@api_router.post("/admin/promos", status_code=201)
+async def admin_create_promo(payload: AdminPromoIn, request: Request):
+    admin = await require_admin(request)
+    promo = {
+        "id": str(uuid.uuid4()), "code": payload.code.upper(), "percent": float(payload.percent),
+        "gold_nick": False, "deleted": False, "created_at": now_utc(),
+    }
+    try:
+        await db.promo_codes.insert_one(dict(promo))
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Промокод с таким названием уже существует")
+    await db.admin_audit.insert_one({"action": "promo_create", "jti": admin["jti"], "promo": promo, "created_at": now_utc()})
+    return {**promo, "unique_users": 0}
+
+
+@api_router.put("/admin/promos/{promo_id}")
+async def admin_update_promo(promo_id: str, payload: AdminPromoIn, request: Request):
+    admin = await require_admin(request)
+    try:
+        promo = await db.promo_codes.find_one_and_update(
+            {"id": promo_id, "deleted": False},
+            {"$set": {"code": payload.code.upper(), "percent": float(payload.percent), "updated_at": now_utc()}},
+            projection={"_id": 0}, return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Промокод с таким названием уже существует")
+    if promo is None:
+        raise HTTPException(status_code=404, detail="Промокод не найден")
+    await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(promo)})
+    await db.admin_audit.insert_one({"action": "promo_update", "jti": admin["jti"], "promo": promo, "created_at": now_utc()})
+    return {**promo, "unique_users": await db.promo_activations.count_documents({"promo_id": promo_id})}
+
+
+@api_router.delete("/admin/promos/{promo_id}")
+async def admin_delete_promo(promo_id: str, request: Request):
+    admin = await require_admin(request)
+    result = await db.promo_codes.update_one({"id": promo_id, "deleted": False}, {"$set": {"deleted": True, "updated_at": now_utc()}})
+    if not result.matched_count:
+        raise HTTPException(status_code=404, detail="Промокод не найден")
+    await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(None)})
+    await db.admin_audit.insert_one({"action": "promo_delete", "jti": admin["jti"], "promo_id": promo_id, "created_at": now_utc()})
+    return {"ok": True}
+
+
 @api_router.post("/admin/login")
 async def admin_login(payload: AdminLoginIn, request: Request):
     ip = client_ip(request)
@@ -1749,6 +1805,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def ensure_indexes():
+    await ensure_promotions(db)
     await db.presence.create_index("session_id", unique=True)
     await db.presence.create_index("last_seen")
     await db.drops.create_index("created_at")
