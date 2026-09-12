@@ -22,7 +22,7 @@ import { useLang } from "../lib/i18n";
 import { rarityColor } from "../lib/rarity";
 import { DepositReceipt } from "../components/DepositReceipt";
 
-const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", deposited: "profile.kind_deposited" };
+const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", deposited: "profile.kind_deposited", purchased: "profile.kind_purchased" };
 
 const InventoryCard = ({ t, item, active, onToggle, onSell, onWithdraw, busy }) => (
   <div className={`inv-card ${active ? "active" : ""}`} style={{ "--rarity": rarityColor(item.rarity) }} data-testid="inventory-item">

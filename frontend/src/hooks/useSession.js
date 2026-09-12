@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { api, getSessionId } from "../lib/api";
+import { api, getSessionId, parseServerDate } from "../lib/api";
 import { useAuth } from "./useAuth";
 
 const DEFAULT_SETTINGS = {
@@ -49,6 +49,7 @@ export function useSession() {
   const [stats, setStats] = useState({ online: 0, upgrades: 0 });
   const [user, setUser] = useState({ balance: 0, nickname: "Player", skins: [] });
   const [drops, setDrops] = useState([]);
+  const [bestDrop, setBestDrop] = useState(null);
   const userRefreshPaused = useRef(false);
   const pauseUserRefresh = useCallback((value) => { userRefreshPaused.current = value; }, []);
 
@@ -66,11 +67,19 @@ export function useSession() {
 
   const refreshDrops = useCallback(async () => {
     try {
-      setDrops(await api.liveDrops(30));
+      const feed = await api.liveDrops(30);
+      setDrops(feed.drops || []);
+      setBestDrop(feed.best_drop ? { ...feed.best_drop, expiresAt: Date.now() + Math.max(0, parseServerDate(feed.best_drop_expires_at) - parseServerDate(feed.server_time)) } : null);
     } catch (e) {
       console.error("drops fetch failed", e);
     }
   }, []);
+
+  useEffect(() => {
+    if (!bestDrop) return;
+    const timer = setTimeout(() => setBestDrop(null), Math.max(0, bestDrop.expiresAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [bestDrop]);
 
   useEffect(() => {
     let alive = true;
@@ -97,5 +106,5 @@ export function useSession() {
     };
   }, [sessionId, refreshUser, refreshDrops]);
 
-  return { sessionId, stats, setStats, user, setUser, refreshUser, drops, refreshDrops, pauseUserRefresh };
+  return { sessionId, stats, setStats, user, setUser, refreshUser, drops, bestDrop, refreshDrops, pauseUserRefresh };
 }

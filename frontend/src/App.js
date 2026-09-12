@@ -43,9 +43,9 @@ const Shell = () => {
       <div className="min-h-screen bg-[#0d0e12] text-white">
         <Header stats={session.stats} user={session.user} topUpOpen={topUpOpen} setTopUpOpen={setTopUpOpen} />
         <div className="flex">
-          <LiveDrop drops={session.drops} />
+          <LiveDrop drops={session.drops} bestDrop={session.bestDrop} />
           <main className="flex-1 min-w-0">
-            <LiveDropStrip drops={session.drops} />
+            <LiveDropStrip drops={session.drops} bestDrop={session.bestDrop} />
             <div className="px-3 py-4 sm:px-4 sm:py-6">
               <Outlet />
               <footer className="pt-7 pb-2 text-center space-y-2">
@@ -120,6 +120,7 @@ const Home = () => {
         onTopUp={() => setTopUpOpen(true)}
         user={user}
         target={target}
+        onPurchased={(updated) => { setUser(updated); refreshUser(); }}
         onSelectTarget={setTarget}
         betSkins={betSkins}
         onToggleBetSkin={toggleBetSkin}

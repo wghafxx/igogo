@@ -23,6 +23,7 @@ import hashlib
 import hmac
 from functools import wraps
 from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
+from shop_purchase import purchase_skins
 import time
 import bcrypt
 import httpx
@@ -213,6 +214,17 @@ class PoolTopUpIn(InputModel):
 
 class UidsIn(InputModel):
     uids: List[str] = Field(min_length=1, max_length=200)
+
+
+class PurchaseLineIn(InputModel):
+    id: str = Field(min_length=1, max_length=100)
+    quantity: int = Field(ge=1, le=100, strict=True)
+
+
+class PurchaseIn(InputModel):
+    request_id: uuid.UUID
+    items: List[PurchaseLineIn] = Field(min_length=1, max_length=100)
+    expected_total: float = Field(gt=0, le=100_000_000)
 
 
 class Drop(BaseModel):
@@ -1358,17 +1370,24 @@ async def admin_bank_pool(payload: PoolTopUpIn, request: Request):
 
 
 @api_router.get("/live-drops")
-async def live_drops(limit: int = 30):
+async def live_drops(limit: int = 30, include_best: bool = False):
     limit = max(1, min(limit, 100))
+    now = now_utc()
     docs = await db.drops.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
-    sids = list({d["session_id"] for d in docs})
+    best = []
+    if include_best:
+        best = await db.drops.find({"created_at": {"$gte": now - timedelta(hours=1), "$lte": now}}, {"_id": 0}).sort([("item_price", -1), ("created_at", -1), ("id", 1)]).to_list(1)
+    sids = list({d["session_id"] for d in docs + best})
     users = {u["session_id"]: u async for u in db.users.find({"session_id": {"$in": sids}}, {"_id": 0, "session_id": 1, "nickname": 1, "avatar": 1, "discord_id": 1, "gold_nick": 1})}
     out = []
-    for d in docs:
+    for d in docs + best:
         u = users.get(d["session_id"])
         if u:
             d.update({"nickname": u.get("nickname") or d.get("nickname"), "avatar": u.get("avatar"), "discord_id": u.get("discord_id"), "gold_nick": bool(u.get("gold_nick"))})
         out.append(Drop(**d).model_dump(exclude={"session_id"}))
+    if include_best:
+        return {"drops": out[:len(docs)], "best_drop": out[-1] if best else None,
+                "best_drop_expires_at": as_utc(best[0]["created_at"]) + timedelta(hours=1) if best else None, "server_time": now}
     return out
 
 
@@ -1483,6 +1502,14 @@ async def shop(
     page = min(page, pages)
     docs = await db.shop_items.find(query, {"_id": 0}).sort([("price", direction), ("id", 1)]).skip((page - 1) * page_size).to_list(page_size)
     return {"items": docs, "total": total, "page": page, "pages": pages}
+
+
+@api_router.post("/shop/buy")
+async def buy_skins(payload: PurchaseIn, request: Request):
+    user = await require_user(request)
+    result = await purchase_skins(db, user, payload.request_id, [line.model_dump() for line in payload.items], payload.expected_total)
+    result["user"] = to_user_out(result["user"]).model_dump()
+    return result
 
 
 @api_router.post("/upgrade", response_model=UpgradeOut)
@@ -1725,6 +1752,7 @@ async def ensure_indexes():
     await db.presence.create_index("session_id", unique=True)
     await db.presence.create_index("last_seen")
     await db.drops.create_index("created_at")
+    await db.drops.create_index([("created_at", -1), ("item_price", -1)])
     await db.users.create_index("session_id", unique=True)
     await db.users.create_index("roblox_nick_normalized", unique=True, partialFilterExpression={"roblox_nick_normalized": {"$type": "string"}})
     await db.user_locks.create_index("session_id", unique=True)
