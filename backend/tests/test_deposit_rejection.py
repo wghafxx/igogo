@@ -43,7 +43,7 @@ def rejection_api(isolated_server):
     yield SimpleNamespace(request=request, deposit=deposit, collection=collection, server=server)
 
 
-@pytest.mark.parametrize("reason", ["illiquid_skin", "yellow_tag", "no_reason"])
+@pytest.mark.parametrize("reason", ["illiquid_skin", "yellow_tag", "no_reason", "Скин не поступил. Проверьте аккаунт получателя.\nМожно создать новую заявку."])
 def test_reason_is_saved_and_visible_to_admin_and_player(rejection_api, reason):
     api = rejection_api
     result = api.request("POST", "/api/admin/deposits/deposit-1/reject", json={"reason": reason})
@@ -59,12 +59,18 @@ def test_reason_is_saved_and_visible_to_admin_and_player(rejection_api, reason):
     assert api.deposit["rejection_reason"] == reason
 
 
-@pytest.mark.parametrize("body", [None, {}, {"reason": ""}, {"reason": None}, {"reason": "custom"}])
-def test_reason_must_be_explicit_and_supported(rejection_api, body):
+@pytest.mark.parametrize("body", [None, {}, {"reason": ""}, {"reason": None}, {"reason": " \n "}, {"reason": "a" * 1001}])
+def test_reason_must_be_nonempty_and_bounded(rejection_api, body):
     result = rejection_api.request("POST", "/api/admin/deposits/deposit-1/reject", json=body)
     assert result.status_code == 422
     rejection_api.collection.update_one.assert_not_awaited()
     assert rejection_api.deposit["status"] == "pending"
+
+
+def test_custom_reason_is_trimmed(rejection_api):
+    response = rejection_api.request("POST", "/api/admin/deposits/deposit-1/reject", json={"reason": "  Скин не получен  "})
+    assert response.status_code == 200
+    assert rejection_api.deposit["rejection_reason"] == "Скин не получен"
 
 
 @pytest.mark.parametrize("status", ["processing", "confirmed", "cancelled", "rejected"])

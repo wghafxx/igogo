@@ -104,6 +104,7 @@ export const adminApi = {
   reject: (id, reason) => adminHttp.post(`/admin/deposits/${id}/reject`, { reason }).then((r) => r.data),
   withdrawals: (status) => adminHttp.get(`/admin/withdrawals`, { params: { status } }).then((r) => r.data),
   withdrawalDone: (id) => adminHttp.post(`/admin/withdrawals/${id}/done`).then((r) => r.data),
+  withdrawalCancel: (id, reason) => adminHttp.post(`/admin/withdrawals/${id}/cancel`, { reason }).then((r) => r.data),
   bank: () => adminHttp.get(`/admin/bank`).then((r) => r.data),
   bankSettings: (payload) => adminHttp.put(`/admin/bank/settings`, payload).then((r) => r.data),
   bankAdjust: (amount, note) => adminHttp.post(`/admin/bank/adjust`, { amount, note }).then((r) => r.data),
@@ -122,3 +123,6 @@ export const DEPOSIT_REJECTION_REASONS = {
   yellow_tag: "Жёлтая табличка на скине",
   no_reason: "Без причины",
 };
+
+export const rejectionReasonText = (reason, t) => Object.prototype.hasOwnProperty.call(DEPOSIT_REJECTION_REASONS, reason)
+  ? t(`requests.rejection_${reason}`) : reason;

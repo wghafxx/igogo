@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
-import { api, formatMoney, parseServerDate } from "../../lib/api";
+import { api, formatMoney, parseServerDate, rejectionReasonText } from "../../lib/api";
 import { useLang } from "../../lib/i18n";
-import { DepositStatus } from "../TopUpModal";
+import { DepositStatus } from "../DepositStatus";
 import { DepositReceipt } from "../DepositReceipt";
 import XrocketPaymentActions from "./XrocketPaymentActions";
 
@@ -43,8 +43,8 @@ export default function MyRequests({ items, onChanged, onNew }) {
             </div>
             <div className="text-[12px] text-[#b4b7c7] break-words" data-testid="my-request-description">{d.description}</div>
             {d.status === "rejected" && d.rejection_reason && (
-              <div className="text-[12px] text-[#ff8a8a] break-words" data-testid="my-request-rejection-reason">
-                {t("requests.rejection_reason")}: {t(`requests.rejection_${d.rejection_reason}`)}
+              <div className="text-[12px] text-[#ff8a8a] whitespace-pre-wrap break-words" data-testid="my-request-rejection-reason">
+                {t("requests.rejection_reason")}: {rejectionReasonText(d.rejection_reason, t)}
               </div>
             )}
             <div className="flex items-center gap-2 text-[11px] text-[#8e91a3]">

@@ -7,7 +7,7 @@ jest.mock("@/lib/utils", () => jest.requireActual("../lib/utils"), { virtual: tr
 jest.mock("../lib/api", () => ({
   ...jest.requireActual("../lib/api"),
   getAdminToken: () => "test-admin",
-  adminApi: { session: jest.fn(), deposits: jest.fn(), reject: jest.fn(), promos: jest.fn() },
+  adminApi: { session: jest.fn(), deposits: jest.fn(), reject: jest.fn(), promos: jest.fn(), withdrawals: jest.fn(), withdrawalDone: jest.fn(), withdrawalCancel: jest.fn() },
 }));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("../components/admin/BankTab", () => () => null);
@@ -17,6 +17,11 @@ jest.mock("../components/admin/DepositAllocationPreview", () => ({ DepositAlloca
 
 const byId = (id) => document.querySelector(`[data-testid="${id}"]`);
 const click = async (id) => act(async () => { byId(id).click(); });
+const typeReason = async (id, text) => act(async () => {
+  const input = byId(id);
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(input, text);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
 let root;
 let container;
 
@@ -30,6 +35,8 @@ beforeEach(async () => {
     description: "Skin", created_at: "2026-09-12T00:00:00Z",
   }]);
   adminApi.reject.mockResolvedValue({ ok: true });
+  adminApi.withdrawals.mockResolvedValue([{ id: "withdrawal-1", status: "pending", user: { nickname: "Player" }, item: { name: "Skin", price: 100 }, created_at: "2026-09-12T00:00:00Z" }]);
+  adminApi.withdrawalCancel.mockResolvedValue({ ok: true });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -83,4 +90,38 @@ test("promo tab loads promo statistics without requesting deposit statuses", asy
   expect(adminApi.deposits).not.toHaveBeenCalled();
   await click("admin-refresh-button");
   expect(adminApi.promos).toHaveBeenCalledTimes(2);
+});
+
+test("custom deposit rejection requires text and submits the trimmed reason", async () => {
+  await click("admin-reject-button");
+  await click("admin-reject-reason-custom");
+  await typeReason("admin-reject-custom-reason", " \n ");
+  expect(byId("admin-reject-confirm").disabled).toBe(true);
+  await typeReason("admin-reject-custom-reason", "  Не получили скин\nПроверьте получателя  ");
+  await click("admin-reject-confirm");
+  expect(adminApi.reject).toHaveBeenCalledWith("deposit-1", "Не получили скин\nПроверьте получателя");
+});
+
+test("withdrawal cancellation requires a reason and preserves it on a failed request", async () => {
+  await click("admin-tab-withdrawals");
+  await click("admin-withdrawal-cancel-button");
+  expect(byId("admin-withdrawal-cancel-confirm").disabled).toBe(true);
+  await typeReason("admin-withdrawal-cancel-reason", "  Нет подходящих скинов  ");
+  adminApi.withdrawalCancel.mockRejectedValueOnce(new Error("Network error"));
+  await click("admin-withdrawal-cancel-confirm");
+  expect(byId("admin-withdrawal-cancel-reason").value).toBe("  Нет подходящих скинов  ");
+  await click("admin-withdrawal-cancel-confirm");
+  expect(adminApi.withdrawalCancel).toHaveBeenLastCalledWith("withdrawal-1", "Нет подходящих скинов");
+  expect(byId("admin-cancel-withdrawal-dialog")).toBeNull();
+  expect(adminApi.withdrawalDone).not.toHaveBeenCalled();
+});
+
+test("cancelled withdrawals show the reason and have no fulfilment actions", async () => {
+  await click("admin-tab-withdrawals");
+  adminApi.withdrawals.mockResolvedValue([{ id: "withdrawal-1", status: "cancelled", item: { name: "Skin", price: 100 }, created_at: "2026-09-12T00:00:00Z", cancellation_reason: "Нет подходящих скинов" }]);
+  await click("admin-withdrawals-cancelled");
+  expect(adminApi.withdrawals).toHaveBeenLastCalledWith("cancelled");
+  expect(byId("admin-withdrawal-reason").textContent).toContain("Нет подходящих скинов");
+  expect(byId("admin-withdrawal-done-button")).toBeNull();
+  expect(byId("admin-withdrawal-cancel-button")).toBeNull();
 });

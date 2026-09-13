@@ -198,21 +198,26 @@ export default function AdminPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [rejectDeposit, setRejectDeposit] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
-  const currentTab = useRef(tab);
-  currentTab.current = tab;
+  const [customReason, setCustomReason] = useState("");
+  const [cancelWithdrawal, setCancelWithdrawal] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [withdrawalStatus, setWithdrawalStatus] = useState("pending");
+  const selectedReason = rejectReason === "custom" ? customReason.trim() : rejectReason;
+  const currentTab = useRef("");
+  currentTab.current = `${tab}:${withdrawalStatus}`;
 
   const load = useCallback(async () => {
     try {
       if (["bank", "players", "rain", "promos"].includes(tab)) return;
-      const result = tab === "withdrawals" ? await adminApi.withdrawals("pending") : await adminApi.deposits(tab);
-      if (currentTab.current === tab) setRows(result);
+      const result = tab === "withdrawals" ? await adminApi.withdrawals(withdrawalStatus) : await adminApi.deposits(tab);
+      if (currentTab.current === `${tab}:${withdrawalStatus}`) setRows(result);
     } catch (e) {
       if (e?.response?.status === 403) {
         setAdminToken(null);
         setAuthed(false);
       } else toast.error("Не удалось загрузить заявки");
     }
-  }, [tab]);
+  }, [tab, withdrawalStatus]);
 
   useEffect(() => {
     if (!authed) return;
@@ -301,6 +306,11 @@ export default function AdminPage() {
         {tab === "players" && <PlayersTab refreshKey={refreshKey} />}
         {tab === "rain" && <RainTab refreshKey={refreshKey} />}
         {tab === "promos" && <PromosTab refreshKey={refreshKey} />}
+        {tab === "withdrawals" && <div className="flex flex-wrap gap-2">
+          {[["pending", "Ожидают выдачи"], ["done", "Выданы"], ["cancelled", "Отменены"]].map(([status, label]) => (
+            <button key={status} onClick={() => setWithdrawalStatus(status)} className={`h-8 px-3 rounded-lg text-[12px] font-bold ${withdrawalStatus === status ? "bg-[#ffb000] text-black" : "bg-[#1c1d25] text-[#8e91a3]"}`} data-testid={`admin-withdrawals-${status}`}>{label}</button>
+          ))}
+        </div>}
 
         {!["bank", "players", "rain", "promos"].includes(tab) && (
         <div className="space-y-3" data-testid="admin-list">
@@ -313,7 +323,7 @@ export default function AdminPage() {
                 d={d}
                 busy={busy}
                 onConfirm={(id, rap, note) => run(() => adminApi.confirm(id, rap, note), "Депозит обработан: скины в инвентаре, остаток на балансе")}
-                onReject={() => { setRejectReason(""); setRejectDeposit(d); }}
+                onReject={() => { setRejectReason(""); setCustomReason(""); setRejectDeposit(d); }}
               />
             ))}
 
@@ -338,27 +348,31 @@ export default function AdminPage() {
           {tab === "withdrawals" &&
             rows.map((w) => (
               <div key={w.id} className="blox-panel px-4 py-3 flex flex-wrap items-center gap-3 text-[12px]" data-testid="admin-withdrawal-row">
-                <span className="font-bold text-[#ffb000] w-20">{waitingFor(w.created_at)}</span>
+                <span className="font-bold text-[#ffb000] w-20">{withdrawalStatus === "pending" ? waitingFor(w.created_at) : fmtDate(w.resolved_at || w.created_at)}</span>
                 {w.item?.image && <img src={w.item.image} alt="" className="w-10 h-10 object-contain" />}
                 <span className="flex-1 min-w-[160px]"><b>{w.item?.name}</b> <span className="text-[#7d8194]">{w.item?.type}</span> · {formatMoney(w.item?.price)} RAP</span>
                 <span className="w-44 truncate">{w.user?.nickname} {w.user?.roblox_nick ? `· Roblox: ${w.user.roblox_nick}` : ""}</span>
                 {w.user?.roblox_link && (
                   <a href={w.user.roblox_link} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:text-white"><ExternalLinkIcon size={13} /></a>
                 )}
-                <button onClick={() => run(() => adminApi.withdrawalDone(w.id), "Вывод отмечен выполненным")} disabled={busy} className="h-8 px-3 rounded-md bg-[#2ecc71] text-black font-bold text-[12px] disabled:opacity-40" data-testid="admin-withdrawal-done-button">
+                {w.status === "pending" && <button onClick={() => run(() => adminApi.withdrawalDone(w.id), "Вывод отмечен выполненным")} disabled={busy} className="h-8 px-3 rounded-md bg-[#2ecc71] text-black font-bold text-[12px] disabled:opacity-40" data-testid="admin-withdrawal-done-button">
                   Скин отправлен
-                </button>
+                </button>}
+                {["pending", "cancelling"].includes(w.status) && <button onClick={() => { setCancelReason(w.cancellation_reason || ""); setCancelWithdrawal(w); }} disabled={busy} className="h-8 px-3 rounded-md bg-[#ff5c5c]/15 text-[#ff8a8a] font-bold disabled:opacity-40" data-testid="admin-withdrawal-cancel-button">
+                  {w.status === "cancelling" ? "Завершить отмену" : "Отменить вывод"}
+                </button>}
+                {w.cancellation_reason && <div className="w-full text-[#ff8a8a] whitespace-pre-wrap break-words" data-testid="admin-withdrawal-reason">Причина отмены: {w.cancellation_reason}</div>}
               </div>
             ))}
         </div>
         )}
       </main>
       <Dialog open={Boolean(rejectDeposit)} onOpenChange={(open) => { if (!open && !busy) setRejectDeposit(null); }}>
-        <DialogContent className="bg-[#1e1f23] border-0 text-white max-w-[calc(100%-2rem)] sm:max-w-[420px] rounded-xl" data-testid="admin-reject-dialog" aria-describedby="admin-reject-description">
+        <DialogContent className="bg-[#1e1f23] border-0 text-white max-w-[calc(100%-2rem)] sm:max-w-[420px] max-h-[90dvh] overflow-y-auto rounded-xl" data-testid="admin-reject-dialog" aria-describedby="admin-reject-description">
           <DialogHeader>
             <DialogTitle>Отклонить пополнение</DialogTitle>
             <DialogDescription className="text-[#8e91a3]">
-              <span id="admin-reject-description">Выберите причину отклонения заявки игрока {rejectDeposit?.nickname}. Игрок увидит её в своих заявках.</span>
+              <span id="admin-reject-description">Выберите или напишите причину отклонения заявки игрока {rejectDeposit?.nickname}. Игрок увидит её в своих заявках.</span>
             </DialogDescription>
           </DialogHeader>
           <fieldset disabled={busy} className="space-y-2">
@@ -369,20 +383,44 @@ export default function AdminPage() {
                 {label}
               </label>
             ))}
+            <label className="flex items-center gap-3 px-3 py-3 rounded-lg bg-[#0f1015] text-[13px] cursor-pointer">
+              <input type="radio" name="deposit-rejection-reason" value="custom" checked={rejectReason === "custom"} onChange={() => setRejectReason("custom")} className="accent-[#ff5c5c]" data-testid="admin-reject-reason-custom" />
+              Своя причина
+            </label>
+            {rejectReason === "custom" && <textarea value={customReason} onChange={(e) => setCustomReason(e.target.value)} maxLength={1000} rows={3} aria-label="Своя причина отклонения" placeholder="Напишите причину для игрока…" className="w-full bg-[#0f1015] rounded-lg p-3 text-[13px] outline-none focus:ring-1 focus:ring-[#ff5c5c] resize-y" data-testid="admin-reject-custom-reason" />}
           </fieldset>
           <div className="flex items-center gap-2">
             <button onClick={() => setRejectDeposit(null)} disabled={busy} className="blox-chip h-10 px-4 text-[12px] font-bold text-[#9a9db0] disabled:opacity-40" data-testid="admin-reject-cancel">Отмена</button>
             <button
               onClick={async () => {
-                if (!rejectDeposit || !rejectReason || busy) return;
-                if (await run(() => adminApi.reject(rejectDeposit.id, rejectReason), "Заявка отклонена")) setRejectDeposit(null);
+                if (!rejectDeposit || !selectedReason || busy) return;
+                if (await run(() => adminApi.reject(rejectDeposit.id, selectedReason), "Заявка отклонена")) setRejectDeposit(null);
               }}
-              disabled={busy || !rejectReason}
+              disabled={busy || !selectedReason}
               className="flex-1 h-10 px-3 rounded-lg bg-[#ff5c5c] hover:bg-[#ff7373] text-white font-bold text-[12px] disabled:opacity-40 transition-colors"
               data-testid="admin-reject-confirm"
             >
               {busy ? "Отклонение…" : "Отклонить пополнение"}
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(cancelWithdrawal)} onOpenChange={(open) => { if (!open && !busy) setCancelWithdrawal(null); }}>
+        <DialogContent className="bg-[#1e1f23] border-0 text-white max-w-[calc(100%-2rem)] sm:max-w-[420px] max-h-[90dvh] overflow-y-auto rounded-xl" data-testid="admin-cancel-withdrawal-dialog">
+          <DialogHeader>
+            <DialogTitle>Отменить вывод</DialogTitle>
+            <DialogDescription className="text-[#8e91a3]">{cancelWithdrawal?.item?.name} · {cancelWithdrawal?.user?.nickname}. Скин вернётся в инвентарь. Игрок увидит причину в профиле, во вкладке «Выводы».</DialogDescription>
+          </DialogHeader>
+          <label className="text-[13px] space-y-2">
+            <span>Причина отмены</span>
+            <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} disabled={busy || cancelWithdrawal?.status === "cancelling"} maxLength={1000} rows={4} placeholder="Напишите причину для игрока…" className="w-full bg-[#0f1015] rounded-lg p-3 outline-none focus:ring-1 focus:ring-[#ff5c5c] resize-y" data-testid="admin-withdrawal-cancel-reason" />
+          </label>
+          <div className="flex gap-2">
+            <button onClick={() => setCancelWithdrawal(null)} disabled={busy} className="blox-chip h-10 px-4 text-[12px] font-bold text-[#9a9db0]">Назад</button>
+            <button disabled={busy || !cancelReason.trim()} onClick={async () => {
+              if (!cancelWithdrawal || !cancelReason.trim() || busy) return;
+              if (await run(() => adminApi.withdrawalCancel(cancelWithdrawal.id, cancelReason.trim()), "Вывод отменён, скин возвращён в инвентарь")) setCancelWithdrawal(null);
+            }} className="flex-1 min-h-10 px-3 rounded-lg bg-[#ff5c5c] hover:bg-[#ff7373] text-white font-bold text-[12px] disabled:opacity-40" data-testid="admin-withdrawal-cancel-confirm">{busy ? "Отмена…" : "Отменить и вернуть скин"}</button>
           </div>
         </DialogContent>
       </Dialog>

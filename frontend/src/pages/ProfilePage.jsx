@@ -18,12 +18,13 @@ import Nick from "../components/Nick";
 import { LinkIcon } from "../components/icons/link";
 import { useAuth } from "../hooks/useAuth";
 import { useSessionCtx } from "../hooks/useSessionCtx";
-import { api, formatMoney, inventoryTotal, parseServerDate } from "../lib/api";
+import { api, formatMoney, inventoryTotal, parseServerDate, rejectionReasonText } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import { rarityColor } from "../lib/rarity";
 import { DepositReceipt } from "../components/DepositReceipt";
+import WithdrawalHistory from "../components/WithdrawalHistory";
 
-const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", deposited: "profile.kind_deposited", purchased: "profile.kind_purchased" };
+const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", withdraw_cancelled: "withdrawals.cancelled", deposited: "profile.kind_deposited", purchased: "profile.kind_purchased" };
 
 const InventoryCard = ({ t, item, active, onToggle, onSell, onWithdraw, busy }) => (
   <div className={`inv-card ${active ? "active" : ""}`} style={{ "--rarity": rarityColor(item.rarity) }} data-testid="inventory-item">
@@ -57,7 +58,10 @@ export default function ProfilePage() {
   const { t, lang } = useLang();
   const fmtDate = (d) => parseServerDate(d).toLocaleString(lang === "en" ? "en-US" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("payment") === "xrocket" ? "payments" : "inventory");
+  const [tab, setTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("payment") === "xrocket" ? "payments" : params.get("tab") === "withdrawals" ? "withdrawals" : "inventory";
+  });
   const [active, setActive] = useState(null);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -75,7 +79,8 @@ export default function ProfilePage() {
   }, [authUser, load]);
 
   useEffect(() => {
-    if (!authUser || tab !== "payments") return;
+    if (!authUser || !["payments", "withdrawals", "items"].includes(tab)) return;
+    load();
     const timer = setInterval(load, 15000);
     window.addEventListener("bloxgrade:payment-confirmed", load);
     return () => { clearInterval(timer); window.removeEventListener("bloxgrade:payment-confirmed", load); };
@@ -185,6 +190,7 @@ export default function ProfilePage() {
                 ["items", HistoryIcon, t("profile.tab_items")],
                 ["games", ZapIcon, t("profile.tab_games")],
                 ["payments", PayIcon, t("profile.tab_payments")],
+                ["withdrawals", SendIcon, t("withdrawals.title")],
               ].map(([k, Icon, label]) => (
                 <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold flex items-center gap-1.5 transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`profile-tab-${k}`}>
                   <Icon size={13} /> {label}
@@ -231,12 +237,13 @@ export default function ProfilePage() {
               <div className="space-y-1.5" data-testid="profile-item-history">
                 {(data?.item_history || []).length === 0 && <div className="h-[200px] flex items-center justify-center text-[13px] text-[#5f6377]">{t("profile.history_empty")}</div>}
                 {(data?.item_history || []).map((h) => (
-                  <div key={h.id} className="h-12 px-3 rounded-lg bg-[#0f1015] flex items-center gap-3 text-[12px]" style={{ boxShadow: `inset 3px 0 0 ${rarityColor(h.item?.rarity)}` }}>
+                  <div key={h.id} className="min-h-12 py-2 px-3 rounded-lg bg-[#0f1015] flex flex-wrap items-center gap-3 text-[12px]" style={{ boxShadow: `inset 3px 0 0 ${rarityColor(h.item?.rarity)}` }}>
                     {h.item?.image && <img src={h.item.image} alt="" className="w-9 h-9 object-contain" />}
                     <div className="min-w-0 flex-1"><span className="font-bold">{h.item?.name}</span> <span className="text-[#7d8194]">{h.item?.type}</span></div>
                     <span className={`font-bold ${h.kind === "won" ? "text-[#2ecc71]" : h.kind === "sold" ? "text-[#ffb000]" : "text-[#00a2ff]"}`}>{KIND_KEYS[h.kind] ? t(KIND_KEYS[h.kind]) : h.kind}</span>
                     <span className="font-bold flex items-center gap-1 w-24 justify-end">{formatMoney(h.price)} <RobuxIcon size={10} /></span>
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(h.created_at)}</span>
+                    {h.cancellation_reason && <div className="w-full text-[#ff8a8a] whitespace-pre-wrap break-words">{t("withdrawals.reason")}: {h.cancellation_reason}</div>}
                   </div>
                 ))}
               </div>
@@ -252,10 +259,13 @@ export default function ProfilePage() {
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(d.created_at)}</span>
                     <DepositReceipt deposit={d} compact testId={`profile-deposit-receipt-${d.id}`} />
                     <XrocketPaymentActions deposit={d} onChanged={load} />
+                    {d.status === "rejected" && d.rejection_reason && <div className="w-full text-[#ff8a8a] whitespace-pre-wrap break-words" data-testid="profile-payment-reason">{t("requests.rejection_reason")}: {rejectionReasonText(d.rejection_reason, t)}</div>}
                   </div>
                 ))}
               </div>
             )}
+
+            {tab === "withdrawals" && <WithdrawalHistory items={data?.withdrawals} onInstructions={openWithdrawalSupport} />}
 
             {tab === "games" && (
               <div className="space-y-1.5" data-testid="profile-games-history">

@@ -18,7 +18,7 @@ import secrets
 from collections import deque
 from decimal import Decimal
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import List, Literal, Optional
 from urllib.parse import urlencode
 import uuid
@@ -27,6 +27,7 @@ import hmac
 from functools import wraps
 from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
 from shop_purchase import purchase_skins
+from withdrawal_cancellation import cancel_withdrawal, finish_cancellation, resolve_history
 from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
 import xrocket_payments as xp
 import time
@@ -207,7 +208,12 @@ class AdminConfirmIn(InputModel):
 
 
 class AdminRejectIn(InputModel):
-    reason: Literal["illiquid_skin", "yellow_tag", "no_reason"]
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def trim_reason(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class BankSettingsIn(InputModel):
@@ -726,7 +732,7 @@ async def liabilities() -> dict:
             {"$project": {"balance": {"$ifNull": ["$balance", 0]}, "inv": {"$sum": {"$ifNull": ["$skins.price", []]}}}},
             {"$group": {"_id": None, "balances": {"$sum": "$balance"}, "inventory": {"$sum": "$inv"}}},
         ]).to_list(1),
-        _sum(db.withdrawals, {"status": "pending"}, "$item.price"),
+        _sum(db.withdrawals, {"status": {"$in": ["pending", "cancelling"]}}, "$item.price"),
     )
     balances = float(agg[0]["balances"]) if agg else 0.0
     inventory = float(agg[0]["inventory"]) if agg else 0.0
@@ -1005,11 +1011,13 @@ async def profile(request: Request):
     upgrades = await db.upgrades.find({"session_id": sid}, {"_id": 0}).sort("created_at", -1).to_list(100)
     best = await db.drops.find({"session_id": sid}, {"_id": 0}).sort("item_price", -1).to_list(1)
     history = await db.item_history.find({"session_id": sid}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    withdrawals = await db.withdrawals.find({"session_id": sid}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return {
         "user": to_user_out(user).model_dump(),
         "stats": await player_stats(sid),
         "best_drop": best[0] if best else None,
         "item_history": history,
+        "withdrawals": withdrawals,
         "games": [
             {
                 "id": u["id"],
@@ -1059,12 +1067,13 @@ async def skins_withdraw(payload: UidsIn, request: Request):
         raise HTTPException(status_code=400, detail="Максимум 10 предметов на вывод в сутки")
     skins = await take_skins(user, uids)
     now = now_utc()
-    await db.withdrawals.insert_many(
-        [{"id": str(uuid.uuid4()), "session_id": user["session_id"], "item": sk, "status": "pending", "created_at": now} for sk in skins]
-    )
-    await db.item_history.insert_many(
-        [{"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": "withdraw_requested", "item": sk, "price": float(sk.get("price") or 0), "created_at": now} for sk in skins]
-    )
+    withdrawals = [{"id": str(uuid.uuid4()), "session_id": user["session_id"], "item": sk, "status": "pending", "created_at": now} for sk in skins]
+    await db.withdrawals.insert_many(withdrawals)
+    for w in withdrawals:
+        await db.item_history.update_one({"id": f"withdrawal:{w['id']}"}, {"$setOnInsert": {
+            "withdrawal_id": w["id"], "session_id": user["session_id"], "kind": "withdraw_requested",
+            "item": w["item"], "price": float(w["item"].get("price") or 0), "created_at": now,
+        }}, upsert=True)
     fresh = await db.users.find_one({"session_id": user["session_id"]}, {"_id": 0})
     return to_user_out(fresh)
 
@@ -1340,9 +1349,10 @@ async def admin_reject_deposit(deposit_id: str, payload: AdminRejectIn, request:
 @api_router.get("/admin/withdrawals")
 async def admin_withdrawals(request: Request, status: str = "pending"):
     await require_admin(request)
-    if status not in ("pending", "done"):
+    if status not in ("pending", "done", "cancelled"):
         raise HTTPException(status_code=400, detail="Неверный статус")
-    docs = await db.withdrawals.find({"status": status}, {"_id": 0}).sort("created_at", 1 if status == "pending" else -1).to_list(200)
+    query = {"status": {"$in": ["pending", "cancelling"]}} if status == "pending" else {"status": status}
+    docs = await db.withdrawals.find(query, {"_id": 0}).sort("created_at", 1 if status == "pending" else -1).to_list(200)
     users = {u["session_id"]: u for u in await db.users.find({"session_id": {"$in": list({d["session_id"] for d in docs})}}, {"_id": 0, "session_id": 1, "nickname": 1, "roblox_nick": 1, "roblox_link": 1, "discord_id": 1}).to_list(500)}
     for d in docs:
         d["user"] = users.get(d["session_id"])
@@ -1357,13 +1367,16 @@ async def admin_withdrawal_done(withdrawal_id: str, request: Request):
     )
     if not w:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
-    await db.item_history.update_one(
-        {"session_id": w["session_id"], "item.uid": w["item"]["uid"], "kind": "withdraw_requested"},
-        {"$set": {"kind": "withdrawn", "resolved_at": now_utc()}},
-    )
+    await resolve_history(db, w, "withdrawn", resolved_at=now_utc())
     price = float((w.get("item") or {}).get("price") or 0)
     bank = await bank_add("withdrawal", -price, note=f"Выдан {(w.get('item') or {}).get('name')}", ref_id=withdrawal_id, session_id=w.get("session_id"))
     return {"ok": True, "bank": bank}
+
+
+@api_router.post("/admin/withdrawals/{withdrawal_id}/cancel")
+async def admin_withdrawal_cancel(withdrawal_id: str, payload: AdminRejectIn, request: Request):
+    await require_admin(request)
+    return await cancel_withdrawal(db, withdrawal_id, payload.reason)
 
 
 @api_router.get("/admin/bank")
@@ -1891,6 +1904,7 @@ async def ensure_indexes():
     await db.item_history.create_index([("session_id", 1), ("created_at", -1)])
     await db.deposits.create_index([("status", 1), ("created_at", 1)])
     await db.withdrawals.create_index([("status", 1), ("created_at", 1)])
+    await db.withdrawals.create_index("id", unique=True)
     await db.bank_ledger.create_index("created_at")
     await db.bank_ledger.create_index("id", unique=True)
     await db.bank_state.create_index("id", unique=True)
@@ -1922,6 +1936,11 @@ async def ensure_indexes():
             await settle_deposit(db, dep)
         except Exception:
             logger.exception("Could not resume deposit %s; administrator may retry", dep["id"])
+    for withdrawal in await db.withdrawals.find({"status": "cancelling"}, {"_id": 0}).to_list(None):
+        try:
+            await finish_cancellation(db, withdrawal)
+        except Exception:
+            logger.exception("Could not resume withdrawal cancellation %s; administrator may retry", withdrawal["id"])
     if xrocket.enabled:
         app.state.xrocket_reconciliation = asyncio.create_task(xp.reconcile_loop(db, xrocket))
 
