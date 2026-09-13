@@ -1,6 +1,6 @@
 import React from "react";
 import { toast } from "sonner";
-import { SendIcon } from "./icons/send";
+import TelegramIcon from "./TelegramIcon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { useLang } from "../lib/i18n";
 
@@ -22,7 +22,7 @@ export const SupportDialog = ({ request, onClose }) => {
     <Dialog open={Boolean(request)} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="w-[92vw] max-w-[420px] max-h-[90dvh] overflow-y-auto bg-[#16171d] border-0 text-white p-6" data-testid="support-dialog">
         <DialogHeader className="text-left">
-          <div className="w-11 h-11 rounded-xl bg-[#00a2ff]/15 text-[#00a2ff] flex items-center justify-center mb-2" aria-hidden="true"><SendIcon size={22} /></div>
+          <div className="w-11 h-11 rounded-xl bg-[#00a2ff]/15 text-[#00a2ff] flex items-center justify-center mb-2" aria-hidden="true"><TelegramIcon size={22} /></div>
           <DialogTitle className="text-lg font-bold" data-testid="support-dialog-title">{withdrawal ? t("support.withdrawal") : t("support.title")}</DialogTitle>
           <DialogDescription className="text-[#a6a9bb] text-sm leading-relaxed" data-testid="support-dialog-description">
             {t(withdrawal ? "support.trade_intro" : "support.text")}
@@ -42,7 +42,7 @@ export const SupportDialog = ({ request, onClose }) => {
         </div>
         {withdrawal && <a href="/profile?tab=withdrawals" onClick={onClose} className="blox-btn-primary min-h-11 px-4 py-3 flex items-center justify-center text-sm font-bold" data-testid="support-withdrawal-history">{t("support.view_withdrawals")}</a>}
         <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className={withdrawal ? "text-xs text-[#8e91a3] hover:text-[#00a2ff] flex items-center justify-center gap-2 py-1" : "blox-btn-primary min-h-11 px-4 py-3 flex items-center justify-center gap-2 text-sm font-bold"} data-testid="support-telegram-link">
-          <SendIcon size={16} /> {t(withdrawal ? "support.help" : "support.write")}
+          <TelegramIcon size={16} /> {t(withdrawal ? "support.help" : "support.write")}
         </a>
       </DialogContent>
     </Dialog>

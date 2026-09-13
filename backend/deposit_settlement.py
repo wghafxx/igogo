@@ -1,9 +1,11 @@
 """Resumable deposits: atomic credit markers make retries safe on standalone MongoDB."""
 from datetime import datetime, timezone
 import uuid
+import logging
 from fastapi import HTTPException
 from pymongo import ReturnDocument
 from deposit_allocation import allocation, cents
+from referrals import process_deposit
 
 
 def now():
@@ -51,7 +53,15 @@ async def settle_deposit(db, dep):
             "session_id": sid, "kind": "deposited", "item": skin, "price": skin["price"],
             "deposit_id": dep_id, "created_at": dep["planned_at"],
         }}, upsert=True)
-    await db.deposits.update_one({"id": dep_id, "status": "processing"}, {"$set": {"status": "confirmed", "resolved_at": now()}})
+    # The invitation bonus has its own durable retry flag so its failure cannot
+    # turn an already credited payment into a payment error for the invited player.
+    await db.deposits.update_one({"id": dep_id, "status": "processing"}, {"$set": {
+        "status": "confirmed", "resolved_at": now(), "referral_pending": True,
+    }})
+    try:
+        await process_deposit(db, dep)
+    except Exception:
+        logging.getLogger(__name__).exception("Referral reward deferred for deposit %s", dep_id)
     return {"ok": True, "rap": dep["rap"], "credited": dep["credited"], "skins_total": dep["skins_total"],
             "balance_credited": remainder, "issued_skins": skins, "bank": state["bank"]}
 

@@ -411,6 +411,7 @@ export default function AdminPage() {
             <DialogTitle>Отменить вывод</DialogTitle>
             <DialogDescription className="text-[#8e91a3]">{cancelWithdrawal?.item?.name} · {cancelWithdrawal?.user?.nickname}. Скин вернётся в инвентарь. Игрок увидит причину в профиле, во вкладке «Выводы».</DialogDescription>
           </DialogHeader>
+          <button type="button" onClick={() => setCancelReason("Долгое ожидание")} disabled={busy || cancelWithdrawal?.status === "cancelling"} className="justify-self-start px-3 py-2 rounded-lg bg-[#ff5c5c]/15 text-[#ff8a8a] text-[12px] font-bold disabled:opacity-40" data-testid="admin-withdrawal-long-wait">Долгое ожидание</button>
           <label className="text-[13px] space-y-2">
             <span>Причина отмены</span>
             <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} disabled={busy || cancelWithdrawal?.status === "cancelling"} maxLength={1000} rows={4} placeholder="Напишите причину для игрока…" className="w-full bg-[#0f1015] rounded-lg p-3 outline-none focus:ring-1 focus:ring-[#ff5c5c] resize-y" data-testid="admin-withdrawal-cancel-reason" />

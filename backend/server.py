@@ -30,6 +30,7 @@ from shop_purchase import purchase_skins
 from withdrawal_cancellation import cancel_withdrawal, finish_cancellation, resolve_history
 from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
 import xrocket_payments as xp
+import referrals
 import time
 import bcrypt
 import httpx
@@ -857,11 +858,12 @@ async def get_user(session_id: str, request: Request):
 
 # ---------- Discord auth ----------
 @api_router.get("/auth/discord/login")
-async def discord_login():
+async def discord_login(ref: Optional[str] = None):
     if not DISCORD_CLIENT_ID or not DISCORD_CLIENT_SECRET:
         return RedirectResponse(f"{APP_URL}/?auth_error=unavailable")
     state = secrets.token_urlsafe(16)
-    await db.oauth_states.insert_one({"state": state, "created_at": now_utc()})
+    inviter = await referrals.inviter_for_code(db, ref)
+    await db.oauth_states.insert_one({"state": state, "created_at": now_utc(), "referrer_id": inviter})
     params = {
         "client_id": DISCORD_CLIENT_ID,
         "redirect_uri": DISCORD_REDIRECT_URI,
@@ -881,7 +883,8 @@ async def discord_callback(request: Request, code: Optional[str] = None, state: 
     browser_state = request.cookies.get("bg_oauth_state", "")
     if not state or not browser_state or not hmac.compare_digest(state, browser_state):
         return RedirectResponse(f"{APP_URL}/?auth_error=state")
-    if not await db.oauth_states.find_one_and_delete({"state": state, "created_at": {"$gt": now_utc() - timedelta(minutes=10)}}):
+    oauth_state = await db.oauth_states.find_one_and_delete({"state": state, "created_at": {"$gt": now_utc() - timedelta(minutes=10)}})
+    if not oauth_state:
         return RedirectResponse(f"{APP_URL}/?auth_error=state")
 
     async with httpx.AsyncClient(timeout=15) as http:
@@ -917,11 +920,12 @@ async def discord_callback(request: Request, code: Optional[str] = None, state: 
         else f"https://cdn.discordapp.com/embed/avatars/{int(discord_id) % 6}.png"
     )
     session_id = f"discord_{discord_id}"
+    referral_fields = await referrals.signup_fields(db, oauth_state.get("referrer_id"), session_id)
     await db.users.update_one(
         {"session_id": session_id},
         {
             "$set": {"nickname": nickname, "avatar": avatar, "discord_id": discord_id, "last_login": now_utc()},
-            "$setOnInsert": {"balance": 0.0, "skins": [], "created_at": now_utc()},
+            "$setOnInsert": {"balance": 0.0, "skins": [], "created_at": now_utc(), **referral_fields},
         },
         upsert=True,
     )
@@ -1033,6 +1037,12 @@ async def profile(request: Request):
             for u in upgrades
         ],
     }
+
+
+@api_router.get("/referrals")
+async def my_referrals(request: Request):
+    user = await require_user(request)
+    return await referrals.summary(db, user["session_id"], APP_URL)
 
 
 @api_router.post("/skins/sell", response_model=UserOut)
@@ -1817,6 +1827,7 @@ async def upgrade(payload: UpgradeIn, request: Request):
         "luck": bool(luck_used),
         "cashback": cashback,
         "created_at": now_utc(),
+        **({"referral_pending": True} if user.get("referred_by") else {}),
     })]
     if win:
         drop = Drop(
@@ -1838,6 +1849,11 @@ async def upgrade(payload: UpgradeIn, request: Request):
             {"id": str(uuid.uuid4()), "session_id": payload.session_id, "kind": "won", "item": target, "price": float(shop_item.get("price") or 0), "created_at": now_utc()}
         ))
     await asyncio.gather(*writes)
+    if user.get("referred_by"):
+        try:
+            await referrals.reward_wager(db, {"id": upgrade_id, "session_id": payload.session_id})
+        except Exception:
+            logger.exception("Referral qualification deferred for upgrade %s", upgrade_id)
     upgrades_total = await count_upgrades()
 
     return UpgradeOut(
@@ -1894,6 +1910,7 @@ logger = logging.getLogger(__name__)
 async def ensure_indexes():
     await ensure_promotions(db)
     await xp.ensure_indexes(db)
+    await referrals.ensure_indexes(db)
     await db.presence.create_index("session_id", unique=True)
     await db.presence.create_index("last_seen")
     await db.drops.create_index("created_at")
@@ -1941,12 +1958,18 @@ async def ensure_indexes():
             await finish_cancellation(db, withdrawal)
         except Exception:
             logger.exception("Could not resume withdrawal cancellation %s; administrator may retry", withdrawal["id"])
+    app.state.referral_reconciliation = asyncio.create_task(referrals.reconcile_loop(db))
     if xrocket.enabled:
         app.state.xrocket_reconciliation = asyncio.create_task(xp.reconcile_loop(db, xrocket))
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    referral_task = getattr(app.state, "referral_reconciliation", None)
+    if referral_task:
+        referral_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await referral_task
     task = getattr(app.state, "xrocket_reconciliation", None)
     if task:
         task.cancel()

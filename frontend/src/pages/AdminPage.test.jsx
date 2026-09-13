@@ -125,3 +125,13 @@ test("cancelled withdrawals show the reason and have no fulfilment actions", asy
   expect(byId("admin-withdrawal-done-button")).toBeNull();
   expect(byId("admin-withdrawal-cancel-button")).toBeNull();
 });
+
+test("long wait withdrawal reason can be selected and edited before cancellation", async () => {
+  await click("admin-tab-withdrawals");
+  await click("admin-withdrawal-cancel-button");
+  await click("admin-withdrawal-long-wait");
+  expect(byId("admin-withdrawal-cancel-reason").value).toBe("Долгое ожидание");
+  await typeReason("admin-withdrawal-cancel-reason", "Долгое ожидание. Создайте новую заявку.");
+  await click("admin-withdrawal-cancel-confirm");
+  expect(adminApi.withdrawalCancel).toHaveBeenCalledWith("withdrawal-1", "Долгое ожидание. Создайте новую заявку.");
+});

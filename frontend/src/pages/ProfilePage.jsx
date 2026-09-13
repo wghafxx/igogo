@@ -23,6 +23,7 @@ import { useLang } from "../lib/i18n";
 import { rarityColor } from "../lib/rarity";
 import { DepositReceipt } from "../components/DepositReceipt";
 import WithdrawalHistory from "../components/WithdrawalHistory";
+import ReferralPanel from "../components/ReferralPanel";
 
 const KIND_KEYS = { won: "profile.kind_won", sold: "profile.kind_sold", withdrawn: "profile.kind_withdrawn", withdraw_requested: "profile.kind_requested", withdraw_cancelled: "withdrawals.cancelled", deposited: "profile.kind_deposited", purchased: "profile.kind_purchased" };
 
@@ -60,7 +61,7 @@ export default function ProfilePage() {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("payment") === "xrocket" ? "payments" : params.get("tab") === "withdrawals" ? "withdrawals" : "inventory";
+    return params.get("payment") === "xrocket" ? "payments" : ["withdrawals", "referrals"].includes(params.get("tab")) ? params.get("tab") : "inventory";
   });
   const [active, setActive] = useState(null);
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -191,6 +192,7 @@ export default function ProfilePage() {
                 ["games", ZapIcon, t("profile.tab_games")],
                 ["payments", PayIcon, t("profile.tab_payments")],
                 ["withdrawals", SendIcon, t("withdrawals.title")],
+                ["referrals", LinkIcon, t("referrals.title")],
               ].map(([k, Icon, label]) => (
                 <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold flex items-center gap-1.5 transition-colors ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`profile-tab-${k}`}>
                   <Icon size={13} /> {label}
@@ -266,6 +268,7 @@ export default function ProfilePage() {
             )}
 
             {tab === "withdrawals" && <WithdrawalHistory items={data?.withdrawals} onInstructions={openWithdrawalSupport} />}
+            {tab === "referrals" && <ReferralPanel />}
 
             {tab === "games" && (
               <div className="space-y-1.5" data-testid="profile-games-history">

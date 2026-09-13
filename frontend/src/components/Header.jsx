@@ -10,7 +10,7 @@ import AnimButton from "./AnimButton";
 import DiscordButton from "./DiscordButton";
 import { BellIcon } from "./icons/bell";
 import { WalletIcon } from "./icons/wallet";
-import { SendIcon } from "./icons/send";
+import TelegramIcon from "./TelegramIcon";
 import { formatNumber, formatMoney } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import LangSwitcher from "./LangSwitcher";
@@ -71,6 +71,11 @@ const ProfileMenu = ({ t, authUser, onLogout }) => (
         </Link>
       </DropdownMenuItem>
       <DropdownMenuItem asChild className="focus:bg-[#22242e] focus:text-white cursor-pointer">
+        <Link to="/profile?tab=referrals" reloadDocument data-testid="menu-referrals-link">
+          <LinkIcon size={14} className="mr-2" /> {t("referrals.title")}
+        </Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild className="focus:bg-[#22242e] focus:text-white cursor-pointer">
         <Link to="/tos" data-testid="menu-tos-link">
           <FileTextIcon size={14} className="mr-2" /> {t("header.tos")}
         </Link>
@@ -116,14 +121,12 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
         <div className="hidden md:block">
           <LangSwitcher />
         </div>
-        <AnimButton
-          icon={SendIcon}
-          size={15}
+        <button
           className="blox-chip w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white"
           title={t("header.telegram")}
           onClick={() => window.open(CHANNEL_URL, "_blank", "noopener")}
           data-testid="telegram-link"
-        />
+        ><TelegramIcon size={15} /></button>
         {process.env.REACT_APP_VK_URL && <a
           href={process.env.REACT_APP_VK_URL}
           target="_blank"

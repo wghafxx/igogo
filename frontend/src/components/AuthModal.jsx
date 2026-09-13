@@ -27,7 +27,7 @@ export default function AuthModal({ open, onOpenChange }) {
   const startLogin = () => {
     if (!ready) return;
     localStorage.setItem("bloxgrade_tos", "1");
-    window.location.href = discordLoginUrl;
+    window.location.href = discordLoginUrl();
   };
 
   return (

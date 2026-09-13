@@ -4,6 +4,7 @@ import { api, getToken, setToken } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import AuthModal from "../components/AuthModal";
 import { useLocation } from "react-router-dom";
+import { capturedReferral, clearReferral } from "../lib/referral";
 
 const AuthContext = createContext(null);
 
@@ -49,6 +50,9 @@ export function AuthProvider({ children }) {
   }, [t]);
 
   useEffect(() => {
+    capturedReferral();
+  }, [location.search]);
+  useEffect(() => {
     refresh();
   }, [refresh]);
   useEffect(() => {
@@ -63,7 +67,9 @@ export function AuthProvider({ children }) {
   const login = useCallback(
     async (token) => {
       setToken(token);
-      return refresh();
+      const user = await refresh();
+      if (user) clearReferral();
+      return user;
     },
     [refresh]
   );

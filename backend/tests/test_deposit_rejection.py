@@ -43,7 +43,7 @@ def rejection_api(isolated_server):
     yield SimpleNamespace(request=request, deposit=deposit, collection=collection, server=server)
 
 
-@pytest.mark.parametrize("reason", ["illiquid_skin", "yellow_tag", "no_reason", "Скин не поступил. Проверьте аккаунт получателя.\nМожно создать новую заявку."])
+@pytest.mark.parametrize("reason", ["long_wait", "illiquid_skin", "yellow_tag", "no_reason", "Скин не поступил. Проверьте аккаунт получателя.\nМожно создать новую заявку."])
 def test_reason_is_saved_and_visible_to_admin_and_player(rejection_api, reason):
     api = rejection_api
     result = api.request("POST", "/api/admin/deposits/deposit-1/reject", json={"reason": reason})

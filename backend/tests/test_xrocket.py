@@ -111,6 +111,21 @@ def test_invoice_contract_and_zero_site_fee(payment_api, currency):
     assert run(api.db.users.find_one({"session_id": "discord_1"}))["balance"] == 0
 
 
+def test_verified_xrocket_deposit_pays_referrer_immediately_once(payment_api):
+    api = payment_api
+    run(api.db.referral_rewards.create_index("id", unique=True))
+    run(api.db.users.update_one({"session_id": "discord_1"}, {"$set": {"referred_by": "discord_2"}}))
+    doc = api.create()
+    assert run(api.db.users.find_one({"session_id": "discord_2"}))["balance"] == 0
+    api.invoices[doc["id"]]["status"] = "paid"
+    assert api.webhook(doc).status_code == 200
+    assert api.webhook(doc, event_id="duplicate-paid-event").status_code == 200
+    # 35 RUB = 70 RAP, so 3.5% is 2.45 RAP, without any wager requirement.
+    assert run(api.db.users.find_one({"session_id": "discord_1"}))["balance"] == 70
+    assert run(api.db.users.find_one({"session_id": "discord_2"}))["balance"] == 2.45
+    assert run(api.db.referral_rewards.count_documents({"kind": "deposit"})) == 1
+
+
 @pytest.mark.parametrize("changes", [{"amount_rub": 34.99}, {"amount_rub": -1}, {"amount_rub": 35.001},
                                       {"amount_rub": 1000001}, {"currency": "FAKE"}, {"request_id": "invalid"}])
 def test_invalid_input_never_calls_provider(payment_api, changes):

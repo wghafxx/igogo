@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getLang } from "./i18n";
+import { capturedReferral } from "./referral";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
@@ -32,7 +33,10 @@ export const getSessionId = () => {
   return id;
 };
 
-export const discordLoginUrl = `${API}/auth/discord/login`;
+export const discordLoginUrl = () => {
+  const ref = capturedReferral();
+  return `${API}/auth/discord/login${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`;
+};
 
 export const api = {
   presence: (session_id) => http.post(`/presence`, { session_id }).then((r) => r.data),
@@ -48,6 +52,7 @@ export const api = {
   depositInfo: () => http.get(`/deposit/info`).then((r) => r.data),
   applyPromo: (code) => http.post(`/promo/apply`, { code }).then((r) => r.data),
   profile: () => http.get(`/profile`).then((r) => r.data),
+  referrals: () => http.get(`/referrals`).then((r) => r.data),
   publicProfile: (discordId) => http.get(`/users/${discordId}`).then((r) => r.data),
   saveRoblox: (payload) => http.post(`/profile/roblox`, payload).then((r) => r.data),
   createDeposit: (payload) => http.post(`/deposits`, payload).then((r) => r.data),
@@ -119,6 +124,7 @@ export const adminApi = {
 export const DEPOSIT_FEE = 0.2;
 
 export const DEPOSIT_REJECTION_REASONS = {
+  long_wait: "Долгое ожидание",
   illiquid_skin: "Неликвидный скин",
   yellow_tag: "Жёлтая табличка на скине",
   no_reason: "Без причины",
