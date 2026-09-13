@@ -5,12 +5,14 @@ import { api } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
 import { toast } from "sonner";
 import { xrocketRu } from "../../lib/xrocket-i18n";
+import { openXrocketPayment } from "../../lib/payment-navigation";
 
 jest.mock("../../lib/api", () => ({
   api: { xrocketInfo: jest.fn(), xrocketInvoices: jest.fn(), createXrocketInvoice: jest.fn(), xrocketInvoice: jest.fn(), refreshXrocketInvoice: jest.fn() },
   formatMoney: (n) => Number(n).toFixed(2), parseServerDate: (d) => new Date(d),
 }));
 jest.mock("../../hooks/useAuth", () => ({ useAuth: jest.fn() }));
+jest.mock("../../lib/payment-navigation", () => ({ openXrocketPayment: jest.fn() }));
 jest.mock("../../lib/i18n", () => ({ useLang: () => ({ t: (key) => jest.requireActual("../../lib/xrocket-i18n").xrocketRu[key] || key, lang: "ru" }) }));
 jest.mock("../TopUpModal", () => ({ PromoInput: () => <div data-testid="promo-input" /> }));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
@@ -65,6 +67,7 @@ test("minimum, full credit, provider fee and all eight currencies", async () => 
   await click("xrocket-pay");
   expect(api.createXrocketInvoice).toHaveBeenCalledWith({ request_id: "request-one", amount_rub: 35.5, currency: "BTC" });
   expect(byId("xrocket-open").getAttribute("href")).toBe(invoice().invoice_url);
+  expect(openXrocketPayment).toHaveBeenCalledWith(invoice().invoice_url);
 });
 
 test("promo adds ten percent to the full amount", async () => {
@@ -134,4 +137,29 @@ test("switching account discards a late invoice response", async () => {
   await render();
   await act(async () => { resolve(invoice()); });
   expect(byId("xrocket-invoice")).toBeNull();
+  expect(openXrocketPayment).not.toHaveBeenCalled();
+});
+
+test("failed history row offers a retry of the original request and redirects", async () => {
+  api.xrocketInvoices.mockResolvedValue([{ ...invoice("payment_error"), invoice_url: null, error_message: "Попробуйте ещё раз" }]);
+  await render();
+  await click("xrocket-history-item");
+  expect(container.textContent).toContain("Попробуйте ещё раз");
+  expect(byId("xrocket-open")).toBeNull();
+  await click("xrocket-retry-invoice");
+  expect(api.createXrocketInvoice).toHaveBeenCalledWith({ request_id: "one", amount_rub: 35, currency: "USDT" });
+  expect(openXrocketPayment).toHaveBeenCalledTimes(1);
+});
+
+test("a delayed payment link redirects once and never shows an unpaid link while creating", async () => {
+  api.createXrocketInvoice.mockResolvedValue({ ...invoice("creating"), invoice_url: null });
+  await render();
+  await click("xrocket-pay");
+  expect(openXrocketPayment).not.toHaveBeenCalled();
+  expect(byId("xrocket-open")).toBeNull();
+  expect(byId("xrocket-status").textContent).toBe(xrocketRu["xrocket.preparing"]);
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(openXrocketPayment).toHaveBeenCalledTimes(1);
+  await act(async () => { jest.advanceTimersByTime(5000); });
+  expect(openXrocketPayment).toHaveBeenCalledTimes(1);
 });

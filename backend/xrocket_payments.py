@@ -10,7 +10,7 @@ import hmac
 import logging
 import time
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
 from urllib.parse import urlparse
 
 import httpx
@@ -42,6 +42,7 @@ def public_invoice(doc):
     return {key: doc.get(key) for key in (
         "id", "status", "amount_rub", "currency", "expected_rap", "quoted_rap",
         "promo_code", "promo_bonus", "credited", "invoice_url", "created_at", "expires_at",
+        "price_amount", "price_currency", "error_message",
     )}
 
 
@@ -53,7 +54,11 @@ class ProviderError(Exception):
 def payment_error(error):
     if error.status == 429:
         return HTTPException(429, "xRocket занят. Повторите проверку немного позже", headers={"Retry-After": str(error.retry_after)})
-    if error.status in (400, 403, 404) and error.code not in ("unauthorized", "forbidden"):
+    if error.status == 401 or error.code in ("unauthorized", "forbidden"):
+        return HTTPException(503, "xRocket не принимает ключ приложения. Обратитесь в поддержку сайта")
+    if error.code == "not_implemented":
+        return HTTPException(503, "xRocket не поддерживает выбранные параметры счёта. Обратитесь в поддержку сайта")
+    if error.status in (400, 403, 404):
         return HTTPException(400, "xRocket не может создать счёт на эту сумму в выбранной валюте. Выберите другую валюту или сумму")
     return HTTPException(503, "Оплата через xRocket временно недоступна. Попробуйте позже")
 
@@ -78,13 +83,20 @@ class XrocketGateway:
         # xRocket allows 20 requests/minute per endpoint/IP. Coordinate workers
         # through MongoDB; browser status polling never calls the provider.
         slot = f"{method}:{path}"
-        try:
-            await db.xrocket_api_slots.find_one_and_update(
-                {"_id": slot, "next_at": {"$lte": now()}},
-                {"$set": {"next_at": now() + timedelta(seconds=3.2)}}, upsert=True,
-            )
-        except DuplicateKeyError:
-            raise ProviderError(429)
+        for attempt in range(2):
+            try:
+                await db.xrocket_api_slots.find_one_and_update(
+                    {"_id": slot, "next_at": {"$lte": now()}},
+                    {"$set": {"next_at": now() + timedelta(seconds=3.2)}}, upsert=True,
+                )
+                break
+            except DuplicateKeyError:
+                reservation = await db.xrocket_api_slots.find_one({"_id": slot})
+                due = reservation["next_at"].replace(tzinfo=timezone.utc)
+                delay = max(0.05, (due - now()).total_seconds() + .05)
+                if attempt or delay > 4:
+                    raise ProviderError(429, retry_after=max(4, int(delay) + 1)) from None
+                await asyncio.sleep(delay)
         try:
             async with httpx.AsyncClient(
                 base_url=self.base_url, timeout=15, transport=self.transport,
@@ -103,6 +115,8 @@ class XrocketGateway:
             if response.status_code == 429:
                 await db.xrocket_api_slots.update_one({"_id": slot}, {"$set": {"next_at": now() + timedelta(seconds=retry)}})
             raise ProviderError(response.status_code, code, retry)
+        if response.status_code == 204:
+            return None
         try:
             return response.json()
         except ValueError:
@@ -133,12 +147,42 @@ async def ensure_indexes(db):
     await db.xrocket_webhooks.create_index("created_at", expireAfterSeconds=30 * 86400)
 
 
+async def quote_crypto(db, gateway, amount_rub, currency):
+    # Production rejects RUB/crypto invoices despite the broader OpenAPI schema.
+    # Freeze the RUB exchange rate and a single-currency amount BEFORE creation.
+    cached = await db.xrocket_rates.find_one({"_id": "RUB", "valid_until": {"$gt": now()}})
+    if not cached:
+        rates = await gateway.request(db, "GET", "/api/v1/rates", params={"base": "RUB", "assets": list(CURRENCIES)})
+        if not isinstance(rates, list):
+            raise HTTPException(503, "Не удалось получить курс xRocket. Повторите попытку")
+        values = {}
+        for row in rates:
+            try:
+                rate = Decimal(str(row["rate"]))
+                if row["currency"] in CURRENCIES and rate.is_finite() and rate > 0:
+                    values[row["currency"]] = str(rate)
+            except (KeyError, TypeError, InvalidOperation):
+                continue
+        cached = {"rates": values, "valid_until": now() + timedelta(seconds=30)}
+        await db.xrocket_rates.update_one({"_id": "RUB"}, {"$set": cached}, upsert=True)
+    if currency not in cached["rates"]:
+        raise HTTPException(503, "Курс выбранной валюты временно недоступен. Выберите другую валюту")
+    rate = Decimal(cached["rates"][currency])
+    # USDT/USDC have six decimals; using more is truncated by the live API.
+    # BTC needs eight decimals for ruble-sized payments; other assets accept six.
+    step = Decimal("0.00000001" if currency == "BTC" else "0.000001")
+    price = (amount_rub / rate).quantize(step, rounding=ROUND_CEILING)
+    return {"price_amount": format(price, "f"), "price_currency": currency,
+            "rub_rate": str(rate), "price_quoted_at": now()}
+
+
 def invoice_body(doc, app_url):
     return {
-        "priceAmount": f"{money(doc['amount_rub']):.2f}", "priceCurrency": "rub",
+        "priceAmount": doc["price_amount"], "priceCurrency": doc["price_currency"],
         "payoutCurrency": doc["currency"], "payCurrencies": [doc["currency"]],
         "numPayments": 1, "clientInvoiceId": doc["id"], "isFeePaidByUser": True,
-        "expiresIn": 3_600_000,
+        # Verified against production expiresAt: this field is currently seconds.
+        "expiresIn": 3600,
         "description": f"BLOXGRADE · {doc['quoted_rap']:.2f} RAP",
         "callback": {"callbackUrl": f"{app_url}/api/payments/xrocket/webhook", "payload": {"order_id": doc["id"]}},
         "url": {"successUrl": f"{app_url}/profile?payment=xrocket", "cancelUrl": f"{app_url}/profile?payment=xrocket"},
@@ -148,14 +192,17 @@ def invoice_body(doc, app_url):
 def validate_invoice(doc, invoice):
     if not isinstance(invoice, dict):
         raise HTTPException(502, "Некорректный ответ xRocket")
+    expected_price = doc.get("price_amount", doc["amount_rub"])
+    expected_currency = doc.get("price_currency", "rub")
     try:
-        valid_amount = money(invoice["priceAmount"]) == money(doc["amount_rub"]) and Decimal(str(invoice["priceAmount"])) == money(doc["amount_rub"])
+        actual_price = Decimal(str(invoice["priceAmount"]))
+        valid_amount = actual_price.is_finite() and actual_price > 0 and actual_price == Decimal(str(expected_price))
     except (KeyError, InvalidOperation, ValueError, TypeError):
         valid_amount = False
     if not isinstance(invoice.get("id"), str) or not invoice["id"]:
         raise HTTPException(502, "Некорректный ответ xRocket")
     if (invoice.get("clientInvoiceId") != doc["id"] or
-            str(invoice.get("priceCurrency", "")).lower() != "rub" or not valid_amount or
+            str(invoice.get("priceCurrency", "")).upper() != expected_currency.upper() or not valid_amount or
             (doc.get("provider_invoice_id") and doc["provider_invoice_id"] != invoice["id"])):
         raise HTTPException(409, "Данные счёта xRocket не совпадают с заявкой")
 
@@ -174,7 +221,7 @@ def invoice_link(invoice):
 async def receive_invoice(db, doc, invoice):
     validate_invoice(doc, invoice)
     provider_status = invoice.get("status")
-    changes = {"provider_invoice_id": invoice["id"], "provider_status": provider_status, "last_checked_at": now()}
+    changes = {"provider_invoice_id": invoice["id"], "provider_status": provider_status, "last_checked_at": now(), "error_message": None}
     if isinstance(invoice.get("links"), dict) and invoice["links"].get("telegramBotLink"):
         changes["invoice_url"] = invoice_link(invoice)
     if isinstance(invoice.get("expiresAt"), str):
@@ -213,9 +260,16 @@ async def create_invoice(db, gateway, user, request_id, amount_rub, currency, ap
     if doc and (doc["session_id"] != user["session_id"] or money(doc["amount_rub"]) != amount_rub or doc["currency"] != currency):
         raise HTTPException(409, "Этот запрос уже использован для другого счёта")
     if not doc:
+        existing = await db.deposits.find_one({
+            "session_id": user["session_id"], "payment_method": "xrocket", "status": "awaiting_payment",
+            "amount_rub": float(amount_rub), "currency": currency, "invoice_url": {"$type": "string"},
+            "expires_at": {"$gt": now()},
+        }, {"_id": 0}, sort=[("created_at", -1)])
+        if existing:
+            return public_invoice(existing)
         if await db.deposits.count_documents({"session_id": user["session_id"], "payment_method": "xrocket", "status": {"$in": list(PENDING)}}) >= 5:
             raise HTTPException(429, "У вас уже 5 неоплаченных счетов. Откройте один из них")
-        recent = await db.deposits.find_one({"session_id": user["session_id"], "payment_method": "xrocket", "created_at": {"$gt": now() - timedelta(seconds=20)}})
+        recent = await db.deposits.find_one({"session_id": user["session_id"], "payment_method": "xrocket", "status": {"$ne": "payment_error"}, "created_at": {"$gt": now() - timedelta(seconds=20)}})
         if recent:
             raise HTTPException(429, "Подождите 20 секунд перед созданием нового счёта")
         bonus = max(Decimal("0"), min(Decimal("0.5"), Decimal(str(user.get("promo_bonus") or 0))))
@@ -242,6 +296,10 @@ async def create_invoice(db, gateway, user, request_id, amount_rub, currency, ap
                 if error.status != 404:
                     raise
         if invoice is None:
+            if not doc.get("price_amount"):
+                quote = await quote_crypto(db, gateway, amount_rub, currency)
+                await db.deposits.update_one({"id": order_id, "status": {"$nin": ["processing", "confirmed"]}}, {"$set": quote})
+                doc.update(quote)
             try:
                 invoice = await gateway.request(db, "POST", "/api/v1/invoices", json=invoice_body(doc, app_url))
             except ProviderError as error:
@@ -253,9 +311,13 @@ async def create_invoice(db, gateway, user, request_id, amount_rub, currency, ap
             raise HTTPException(502, "xRocket не вернул ссылку для оплаты. Повторите запрос")
         return public_invoice(result)
     except ProviderError as error:
-        if error.status in (400, 401, 403, 404):
-            await db.deposits.update_one({"id": order_id, "status": "creating"}, {"$set": {"status": "payment_error"}})
-        raise payment_error(error) from None
+        message = payment_error(error)
+        changes = {"error_message": message.detail}
+        if error.status in (400, 401, 403, 404) or error.code == "not_implemented":
+            changes["status"] = "payment_error"
+        await db.deposits.update_one({"id": order_id, "status": {"$in": ["creating", "payment_error"]}}, {"$set": changes})
+        logger.warning("xRocket invoice creation failed: order=%s http=%s code=%s", order_id, error.status, error.code)
+        raise message from None
 
 
 async def synchronize(db, gateway, doc):
@@ -270,7 +332,7 @@ async def synchronize(db, gateway, doc):
     except ProviderError as error:
         if error.status == 404 and doc["status"] == "creating":
             # No provider invoice was created; let the user retry with a new ID.
-            await db.deposits.update_one({"id": doc["id"], "status": "creating"}, {"$set": {"status": "payment_error"}})
+            await db.deposits.update_one({"id": doc["id"], "status": "creating"}, {"$set": {"status": "payment_error", "error_message": "Счёт не был создан. Нажмите «Повторить создание счёта»"}})
             return await db.deposits.find_one({"id": doc["id"]}, {"_id": 0})
         raise payment_error(error) from None
     return await receive_invoice(db, doc, invoice)

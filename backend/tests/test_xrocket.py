@@ -47,8 +47,13 @@ def payment_api(isolated_server, monkeypatch):
 
     async def provider(db, method, path, **kwargs):
         calls.append((method, path, copy.deepcopy(kwargs)))
+        if path == "/api/v1/rates":
+            return [{"currency": c, "rate": "84.2486"} for c in xp.CURRENCIES]
         if method == "POST":
             body = kwargs["json"]
+            # Observed production contract, which is narrower than OpenAPI.
+            if body["priceCurrency"] != body["payCurrencies"][0]:
+                raise xp.ProviderError(500, "not_implemented")
             key = body["clientInvoiceId"]
             if key in invoices:
                 raise xp.ProviderError(409, "client_id_already_taken")
@@ -93,11 +98,12 @@ def payment_api(isolated_server, monkeypatch):
 def test_invoice_contract_and_zero_site_fee(payment_api, currency):
     api = payment_api
     doc = api.create(currency=currency)
-    body = api.calls[0][2]["json"]
-    assert body["priceAmount"] == "35.00" and body["priceCurrency"] == "rub"
+    body = next(call[2]["json"] for call in api.calls if call[0] == "POST")
+    assert body["priceAmount"] == ("0.41543718" if currency == "BTC" else "0.415438")
+    assert body["priceCurrency"] == currency
     assert body["payoutCurrency"] == currency and body["payCurrencies"] == [currency]
     assert body["isFeePaidByUser"] is True and body["numPayments"] == 1
-    assert body["expiresIn"] == 3_600_000
+    assert body["expiresIn"] == 3600
     assert body["callback"]["callbackUrl"] == "http://test/api/payments/xrocket/webhook"
     assert doc["expected_rap"] == doc["quoted_rap"] == 70
     assert doc["status"] == "awaiting_payment"
@@ -118,7 +124,7 @@ def test_idempotency_and_account_ownership(payment_api):
     key = str(uuid.uuid4())
     doc = api.create(request_id=key)
     assert api.create(request_id=key)["id"] == doc["id"]
-    assert len(api.calls) == 1
+    assert len(api.calls) == 2
     payload = {"request_id": key, "amount_rub": 36, "currency": "USDT"}
     assert api.request("POST", BASE + "/invoices", json=payload).status_code == 409
     payload["amount_rub"] = 35
@@ -129,22 +135,24 @@ def test_idempotency_and_account_ownership(payment_api):
     assert api.request("GET", BASE + "/invoices", who=None).status_code == 401
     # Browser polling reads local state only.
     assert api.request("GET", BASE + "/invoices/" + doc["id"]).status_code == 200
-    assert len(api.calls) == 1
+    assert len(api.calls) == 2
 
 
 def test_timeout_recovers_original_invoice(payment_api, monkeypatch):
     api = payment_api
 
     async def interrupted(*args, **kwargs):
-        await api.provider(*args, **kwargs)
-        raise api.xp.ProviderError(503)
+        response = await api.provider(*args, **kwargs)
+        if args[1] == "POST":
+            raise api.xp.ProviderError(503)
+        return response
 
     monkeypatch.setattr(api.gateway, "request", interrupted)
     payload = {"request_id": str(uuid.uuid4()), "amount_rub": 35, "currency": "USDT"}
     assert api.request("POST", BASE + "/invoices", json=payload).status_code == 503
     monkeypatch.setattr(api.gateway, "request", api.provider)
     assert api.request("POST", BASE + "/invoices", json=payload).json()["status"] == "awaiting_payment"
-    assert [call[0] for call in api.calls] == ["POST", "GET"]
+    assert [call[0] for call in api.calls] == ["GET", "POST", "GET"]
     assert len(api.invoices) == run(api.db.deposits.count_documents({})) == 1
 
 
@@ -184,7 +192,7 @@ def test_only_authoritative_full_payment_credits(payment_api, status):
 
 
 @pytest.mark.parametrize("field,value", [("priceAmount", "35.001"), ("priceAmount", "350"),
-                                           ("priceCurrency", "USDT"), ("clientInvoiceId", "other"), ("id", "other")])
+                                           ("priceCurrency", "RUB"), ("clientInvoiceId", "other"), ("id", "other")])
 def test_invoice_mismatch_never_credits(payment_api, field, value):
     api = payment_api
     doc = api.create()
@@ -307,3 +315,69 @@ def test_background_recovery_without_webhook_or_browser(payment_api, monkeypatch
         run(api.xp.reconcile_loop(api.db, api.gateway))
     assert run(api.db.users.find_one({"session_id": "discord_1"}))["balance"] == 70
     assert run(api.db.deposits.find_one({"id": doc["id"]}))["status"] == "confirmed"
+
+
+def test_frozen_crypto_amount_survives_rate_changes_and_retries(payment_api, monkeypatch):
+    api = payment_api
+    original = api.provider
+
+    async def interrupted(db, method, path, **kwargs):
+        if method == "POST":
+            raise api.xp.ProviderError(503)
+        return await original(db, method, path, **kwargs)
+
+    monkeypatch.setattr(api.gateway, "request", interrupted)
+    payload = {"request_id": str(uuid.uuid4()), "amount_rub": 35, "currency": "USDT"}
+    assert api.request("POST", BASE + "/invoices", json=payload).status_code == 503
+    first = run(api.db.deposits.find_one({}))
+    assert first["price_amount"] == "0.415438"
+    run(api.db.xrocket_rates.update_one({"_id": "RUB"}, {"$set": {"rates.USDT": "120"}}))
+    monkeypatch.setattr(api.gateway, "request", original)
+    result = api.request("POST", BASE + "/invoices", json=payload)
+    assert result.status_code == 200 and result.json()["price_amount"] == first["price_amount"]
+    assert api.invoices[first["id"]]["priceAmount"] == first["price_amount"]
+
+
+def test_recovers_failed_legacy_attempt_and_reuses_existing_payable_invoice(payment_api):
+    api = payment_api
+    key = str(uuid.uuid4())
+    run(api.db.deposits.insert_one({
+        "id": f"xrocket:{key}", "session_id": "discord_1", "payment_method": "xrocket", "status": "payment_error",
+        "amount_rub": 35, "currency": "USDT", "expected_rap": 70, "quoted_rap": 70, "promo_bonus": 0,
+        "created_at": api.xp.now(), "error_message": "Previous attempt failed",
+    }))
+    doc = api.create(request_id=key)
+    assert doc["status"] == "awaiting_payment" and doc["error_message"] is None
+    assert doc["price_currency"] == "USDT" and doc["price_amount"] == "0.415438"
+    assert api.create()["id"] == doc["id"]
+    assert len(api.invoices) == 1
+
+
+@pytest.mark.parametrize("rates", [[], [{"currency": "USDT", "rate": "NaN"}], [{"currency": "USDT", "rate": "0"}],
+                                      [{"currency": "USDT", "rate": "-1"}], {"unexpected": True}])
+def test_missing_or_invalid_exchange_rate_never_creates_invoice(payment_api, monkeypatch, rates):
+    api = payment_api
+
+    async def invalid_rate(db, method, path, **kwargs):
+        assert path == "/api/v1/rates"
+        return rates
+
+    monkeypatch.setattr(api.gateway, "request", invalid_rate)
+    response = api.request("POST", BASE + "/invoices", json={"request_id": str(uuid.uuid4()), "amount_rub": 35, "currency": "USDT"})
+    assert response.status_code == 503 and not api.invoices
+
+
+def test_provider_error_is_recorded_and_does_not_look_like_unpaid_invoice(payment_api, monkeypatch):
+    api = payment_api
+
+    async def unsupported(db, method, path, **kwargs):
+        if method == "POST":
+            raise api.xp.ProviderError(500, "not_implemented")
+        return await api.provider(db, method, path, **kwargs)
+
+    monkeypatch.setattr(api.gateway, "request", unsupported)
+    response = api.request("POST", BASE + "/invoices", json={"request_id": str(uuid.uuid4()), "amount_rub": 35, "currency": "USDT"})
+    assert response.status_code == 503
+    row = api.request("GET", BASE + "/invoices").json()[0]
+    assert row["status"] == "payment_error" and "параметры" in row["error_message"]
+    assert not row["invoice_url"]

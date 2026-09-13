@@ -50,8 +50,8 @@ const RU = [
     "7.2. Порядок обработки данных описан в Политике конфиденциальности (/privacy).",
   ]],
   ["8. Оплата в рублях и возвраты", [
-    "8.1. Тариф денежного пополнения — 1 RAP = 0,50 ₽. Доступны оплата криптовалютой через xRocket со счётом в рублях и СБП через поддержку. После подтверждения оплаты xRocket RAP зачисляются автоматически на баланс, без покупки скинов и без комиссии сайта 20%.",
-    "8.2. Минимальная сумма пополнения — 35 ₽ (70 RAP до бонуса промокода). Комиссия xRocket оплачивается пользователем дополнительно и показывается платёжной системой до оплаты. Курс конвертации и итоговую сумму в криптовалюте определяет xRocket.",
+    "8.1. Тариф денежного пополнения — 1 RAP = 0,50 ₽. Доступны оплата криптовалютой через xRocket с расчётом рублёвой суммы по его курсу и СБП через поддержку. После подтверждения оплаты xRocket RAP зачисляются автоматически на баланс, без покупки скинов и без комиссии сайта 20%.",
+    "8.2. Минимальная сумма пополнения — 35 ₽ (70 RAP до бонуса промокода). Комиссия xRocket оплачивается пользователем дополнительно и показывается платёжной системой до оплаты. Курс xRocket и сумма в выбранной криптовалюте фиксируются при создании счёта.",
     "8.3. В связи с нематериальным характером цифровых товаров возврат денежных средств после зачисления не осуществляется, за исключением случаев, когда услуга не была оказана по технической вине Сервиса.",
     "8.4. Для рассмотрения вопроса о возврате Пользователь обязан обратиться в службу поддержки в течение 24 часов с момента оплаты. Решение принимается Администрацией индивидуально.",
     "8.5. Пользователь обязуется не инициировать возврат платежа (chargeback) через платёжные системы без предварительного обращения в службу поддержки Сервиса.",
@@ -107,8 +107,8 @@ const EN = [
     "7.2. Data processing is described in the Privacy Policy (/privacy).",
   ]],
   ["8. Ruble payments and refunds", [
-    "8.1. The monetary top-up rate is 1 RAP = ₽0.50. Available methods are cryptocurrency through xRocket with an invoice priced in rubles, and SBP via support. Once xRocket confirms payment, RAP is credited automatically to the balance, with no skin purchases and no 20% site fee.",
-    "8.2. The minimum top-up is ₽35 (70 RAP before any promo bonus). The payer covers xRocket's fee on top, shown by the payment provider before payment. xRocket determines the conversion rate and total cryptocurrency amount.",
+    "8.1. The monetary top-up rate is 1 RAP = ₽0.50. Available methods are cryptocurrency through xRocket with the ruble amount converted at its exchange rate, and SBP via support. Once xRocket confirms payment, RAP is credited automatically to the balance, with no skin purchases and no 20% site fee.",
+    "8.2. The minimum top-up is ₽35 (70 RAP before any promo bonus). The payer covers xRocket's fee on top, shown by the payment provider before payment. The xRocket exchange rate and cryptocurrency amount are fixed when the invoice is created.",
     "8.3. Due to the intangible nature of digital goods, refunds are not issued after crediting, except when the service was not provided due to a technical fault of the Service.",
     "8.4. To request a refund the User must contact support within 24 hours of payment. The decision is made by the administration individually.",
     "8.5. The User agrees not to initiate a chargeback through payment systems without contacting the Service support first.",
