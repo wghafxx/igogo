@@ -53,6 +53,11 @@ export const api = {
   createDeposit: (payload) => http.post(`/deposits`, payload).then((r) => r.data),
   cancelDeposit: (id) => http.post(`/deposits/${id}/cancel`).then((r) => r.data),
   myDeposits: () => http.get(`/deposits/my`).then((r) => r.data),
+  xrocketInfo: () => http.get(`/payments/xrocket/info`).then((r) => r.data),
+  xrocketInvoices: () => http.get(`/payments/xrocket/invoices`).then((r) => r.data),
+  createXrocketInvoice: (payload) => http.post(`/payments/xrocket/invoices`, payload).then((r) => r.data),
+  xrocketInvoice: (id) => http.get(`/payments/xrocket/invoices/${encodeURIComponent(id)}`).then((r) => r.data),
+  refreshXrocketInvoice: (id) => http.post(`/payments/xrocket/invoices/${encodeURIComponent(id)}/refresh`).then((r) => r.data),
   sellSkins: (uids) => http.post(`/skins/sell`, { uids }).then((r) => r.data),
   withdrawSkins: (uids) => http.post(`/skins/withdraw`, { uids }).then((r) => r.data),
 };

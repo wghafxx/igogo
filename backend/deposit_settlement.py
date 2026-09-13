@@ -41,7 +41,9 @@ async def settle_deposit(db, dep):
     receipt = next(r for r in state["deposit_receipts"] if r["id"] == dep_id)
     await db.bank_ledger.update_one({"id": f"deposit:{dep_id}"}, {"$setOnInsert": {
         "kind": "deposit", "amount": dep["rap"], "bank_after": receipt["bank_after"],
-        "note": f"{dep.get('nickname')}: {len(skins)} скинов ({dep['skins_total']} RAP), остаток {remainder} RAP",
+        "note": (f"{dep.get('nickname')}: xRocket, {dep['amount_rub']} ₽, на баланс {remainder} RAP"
+                 if dep.get("payment_method") == "xrocket" else
+                 f"{dep.get('nickname')}: {len(skins)} скинов ({dep['skins_total']} RAP), остаток {remainder} RAP"),
         "ref_id": dep_id, "session_id": sid, "created_at": dep["planned_at"],
     }}, upsert=True)
     for skin in skins:
@@ -56,6 +58,8 @@ async def settle_deposit(db, dep):
 
 async def confirm_deposit(db, dep_id, rap, note):
     dep = await db.deposits.find_one({"id": dep_id}, {"_id": 0})
+    if dep and dep.get("payment_method") == "xrocket":
+        raise HTTPException(409, "Платежи xRocket подтверждаются автоматически платёжной системой")
     if not dep or dep["status"] not in ("pending", "processing", "confirmed"):
         raise HTTPException(404, "Заявка не найдена или уже отклонена/отменена")
     if dep["status"] == "confirmed":

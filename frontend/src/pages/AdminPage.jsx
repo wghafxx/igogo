@@ -14,6 +14,7 @@ import RainTab from "../components/admin/RainTab";
 import PromosTab from "../components/admin/PromosTab";
 import { DepositAllocationPreview } from "../components/admin/DepositAllocationPreview";
 import { DepositReceipt } from "../components/DepositReceipt";
+import { DepositStatus } from "../components/DepositStatus";
 
 const waitingFor = (iso) => {
   const mins = Math.max(0, Math.floor((Date.now() - parseServerDate(iso).getTime()) / 60000));
@@ -276,6 +277,7 @@ export default function AdminPage() {
               ["rejected", "Отклонено"],
               ["cancelled", "Отменённые"],
               ["withdrawals", "Выводы скинов"],
+              ["xrocket", "Платежи xRocket"],
               ["bank", "Банк"],
               ["players", "Игроки"],
               ["promos", "Промокоды"],
@@ -315,14 +317,15 @@ export default function AdminPage() {
               />
             ))}
 
-          {(tab === "confirmed" || tab === "rejected" || tab === "cancelled") &&
+          {(["confirmed", "rejected", "cancelled", "xrocket"].includes(tab)) &&
             rows.map((d) => (
               <div key={d.id} className="blox-panel px-4 py-3 flex flex-wrap items-center gap-3 text-[12px]" data-testid="admin-history-row">
                 <span className="font-bold w-40 truncate">{d.nickname}</span>
                 <span className="text-[#8e91a3] w-36">Discord {d.discord_id}</span>
                 <span className="flex-1 min-w-[200px] text-[#b4b7c7] truncate">{d.description}</span>
                 {d.expected_rap > 0 && <span className="text-[11px] text-[#8e91a3]">заявлено {formatMoney(d.expected_rap)} RAP{d.receiver_nick ? ` → ${d.receiver_nick}` : ""}</span>}
-                {tab === "confirmed" && <DepositReceipt deposit={d} compact testId={`admin-deposit-receipt-${d.id}`} />}
+                {tab === "xrocket" && <DepositStatus status={d.status} />}
+                {(["confirmed", "xrocket"].includes(tab)) && <DepositReceipt deposit={d} compact testId={`admin-deposit-receipt-${d.id}`} />}
                 {tab === "rejected" && d.rejection_reason && (
                   <span className="text-[#ff8a8a]" data-testid="admin-deposit-rejection-reason">
                     Причина: {DEPOSIT_REJECTION_REASONS[d.rejection_reason] || d.rejection_reason}

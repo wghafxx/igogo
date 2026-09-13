@@ -8,6 +8,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 import asyncio
+import json
+from contextlib import suppress
 import os
 import logging
 import random
@@ -26,6 +28,7 @@ from functools import wraps
 from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
 from shop_purchase import purchase_skins
 from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
+import xrocket_payments as xp
 import time
 import bcrypt
 import httpx
@@ -55,6 +58,11 @@ ADMIN_LOCK_MINUTES = 15
 CORS_ORIGINS = [o.strip() for o in os.environ['CORS_ORIGINS'].split(',') if o.strip()]
 DISCORD_REDIRECT_URI = f"{APP_URL}/api/auth/discord/callback"
 DISCORD_API = "https://discord.com/api/v10"
+xrocket = xp.XrocketGateway(
+    token=os.environ.get("XROCKET_API_TOKEN", ""),
+    webhook_secret=os.environ.get("XROCKET_WEBHOOK_SECRET", ""),
+    base_url=os.environ.get("XROCKET_API_BASE_URL", xp.PRODUCTION_API),
+)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -175,6 +183,12 @@ class PromoIn(InputModel):
 class AdminPromoIn(InputModel):
     code: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     percent: Decimal = Field(gt=0, le=50, decimal_places=2)
+
+
+class XrocketInvoiceIn(InputModel):
+    request_id: uuid.UUID
+    amount_rub: Decimal = Field(ge=35, le=1_000_000, decimal_places=2)
+    currency: Literal["GRAM", "USDT", "USDC", "BTC", "ETH", "TRX", "SOL", "BNB"]
 
 
 class DepositIn(InputModel):
@@ -1118,6 +1132,64 @@ async def my_deposits(request: Request):
     return docs
 
 
+# ---------- xRocket payments ----------
+@api_router.get("/payments/xrocket/info")
+async def xrocket_info():
+    return {"enabled": xrocket.enabled, "min_rub": float(xp.MIN_RUB), "max_rub": float(xp.MAX_RUB),
+            "rap_rub_rate": float(xp.RAP_RUB_RATE), "site_fee": 0, "fee_paid_by_user": True,
+            "currencies": list(xp.CURRENCIES)}
+
+
+@api_router.post("/payments/xrocket/invoices")
+@serialized_user_action
+async def xrocket_create_invoice(payload: XrocketInvoiceIn, request: Request):
+    user = await require_user(request)
+    return await xp.create_invoice(db, xrocket, user, payload.request_id, payload.amount_rub, payload.currency, APP_URL)
+
+
+@api_router.get("/payments/xrocket/invoices")
+async def xrocket_my_invoices(request: Request):
+    user = await require_user(request)
+    docs = await db.deposits.find({"session_id": user["session_id"], "payment_method": "xrocket"}, {"_id": 0}).sort("created_at", -1).to_list(20)
+    return [xp.public_invoice(doc) for doc in docs]
+
+
+async def require_xrocket_invoice(invoice_id, request):
+    user = await require_user(request)
+    doc = await db.deposits.find_one({"id": invoice_id, "session_id": user["session_id"], "payment_method": "xrocket"}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Счёт не найден")
+    return doc
+
+
+@api_router.get("/payments/xrocket/invoices/{invoice_id}")
+async def xrocket_invoice_status(invoice_id: str, request: Request):
+    return xp.public_invoice(await require_xrocket_invoice(invoice_id, request))
+
+
+@api_router.post("/payments/xrocket/invoices/{invoice_id}/refresh")
+async def xrocket_refresh_invoice(invoice_id: str, request: Request):
+    doc = await require_xrocket_invoice(invoice_id, request)
+    return xp.public_invoice(await xp.synchronize(db, xrocket, doc))
+
+
+@api_router.post("/payments/xrocket/webhook")
+async def xrocket_webhook(request: Request):
+    raw = bytearray()
+    async for chunk in request.stream():
+        raw.extend(chunk)
+        if len(raw) > 65_536:
+            raise HTTPException(413, "Слишком большое событие")
+    if not xrocket.verify_signature(bytes(raw), request.headers):
+        raise HTTPException(401, "Неверная подпись xRocket")
+    try:
+        event = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(400, "Некорректное событие xRocket")
+    await xp.handle_event(db, xrocket, event)
+    return {"ok": True}
+
+
 # ---------- Admin ----------
 @api_router.get("/admin/promos")
 async def admin_promos(request: Request):
@@ -1222,10 +1294,12 @@ async def admin_session(request: Request):
 @api_router.get("/admin/deposits")
 async def admin_deposits(request: Request, status: str = "pending"):
     await require_admin(request)
-    if status not in ("pending", "confirmed", "rejected", "cancelled"):
+    if status not in ("pending", "confirmed", "rejected", "cancelled", "xrocket"):
         raise HTTPException(status_code=400, detail="Неверный статус")
     order = 1 if status == "pending" else -1
-    query = {"status": {"$in": ["pending", "processing"]}} if status == "pending" else {"status": status}
+    query = {"status": {"$in": ["pending", "processing"]}, "payment_method": {"$ne": "xrocket"}} if status == "pending" else {"status": status}
+    if status == "xrocket":
+        query = {"payment_method": "xrocket"}
     docs = await db.deposits.find(query, {"_id": 0}).sort("created_at", order).to_list(200)
     return docs
 
@@ -1806,6 +1880,7 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def ensure_indexes():
     await ensure_promotions(db)
+    await xp.ensure_indexes(db)
     await db.presence.create_index("session_id", unique=True)
     await db.presence.create_index("last_seen")
     await db.drops.create_index("created_at")
@@ -1847,8 +1922,15 @@ async def ensure_indexes():
             await settle_deposit(db, dep)
         except Exception:
             logger.exception("Could not resume deposit %s; administrator may retry", dep["id"])
+    if xrocket.enabled:
+        app.state.xrocket_reconciliation = asyncio.create_task(xp.reconcile_loop(db, xrocket))
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    task = getattr(app.state, "xrocket_reconciliation", None)
+    if task:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
     client.close()

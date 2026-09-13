@@ -71,25 +71,7 @@ export const PromoInput = ({ compact = false }) => {
   );
 };
 
-const STATUS_STYLE = {
-  pending: "text-[#ffb000]",
-  processing: "text-[#ffb000]",
-  confirmed: "text-[#2ecc71]",
-  rejected: "text-[#ff5c5c]",
-  cancelled: "text-[#9a9db0]",
-};
-const STATUS_KEYS = {
-  pending: "topup.status_pending",
-  processing: "topup.status_processing",
-  confirmed: "topup.status_confirmed",
-  rejected: "topup.status_rejected",
-  cancelled: "topup.status_cancelled",
-};
-
-export const DepositStatus = ({ status }) => {
-  const { t } = useLang();
-  return <span className={`font-bold ${STATUS_STYLE[status] || ""}`}>{STATUS_KEYS[status] ? t(STATUS_KEYS[status]) : status}</span>;
-};
+export { DepositStatus } from "./DepositStatus";
 
 export default function TopUpModal({ open, onOpenChange }) {
   const { authUser } = useAuth();
@@ -126,7 +108,7 @@ export default function TopUpModal({ open, onOpenChange }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, authUser?.session_id]);
 
-  const pendingCount = mine.filter((d) => ["pending", "processing"].includes(d.status)).length;
+  const pendingCount = mine.filter((d) => ["pending", "processing", "creating", "awaiting_payment"].includes(d.status)).length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -151,7 +133,7 @@ export default function TopUpModal({ open, onOpenChange }) {
             </button>
           </div>
 
-          {tab === "rubles" && <RubTopUp />}
+          {tab === "rubles" && <RubTopUp onChanged={loadMine} />}
 
           {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 35} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
           {tab === "skins" && step === "receiver" && (
@@ -164,7 +146,7 @@ export default function TopUpModal({ open, onOpenChange }) {
           )}
           {tab === "requests" && (authUser ? <MyRequests items={mine} onChanged={loadMine} onNew={() => { setTab("skins"); setStep("amount"); }} /> : <div className="h-[140px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="my-requests-guest">{t("topup.guest_requests")}</div>)}
 
-          <div className="text-[11px] text-[#5f6377] text-center leading-snug">{t("topup.check_30min")} {SUPPORT_URL ? (<a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline">{t("topup.check_support_link")}{SUPPORT_HANDLE ? ` ${SUPPORT_HANDLE}` : ""}</a>) : t("topup.check_support_btn")}.</div>
+          {tab === "skins" && <div className="text-[11px] text-[#5f6377] text-center leading-snug">{t("topup.check_30min")} {SUPPORT_URL ? (<a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-[#00a2ff] hover:underline">{t("topup.check_support_link")}{SUPPORT_HANDLE ? ` ${SUPPORT_HANDLE}` : ""}</a>) : t("topup.check_support_btn")}.</div>}
         </div>
       </DialogContent>
     </Dialog>

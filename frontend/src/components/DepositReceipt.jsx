@@ -11,7 +11,7 @@ export const DepositReceipt = ({ deposit, testId, compact = false }) => {
   return (
     <div className="w-full space-y-2 text-[11px] text-[#b4b7c7]" data-testid={testId}>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
-        <span data-testid={`${testId}-skins-total`}>{t("receipt.skins")} <b className="text-[#ffb000]">{skins.length} {t("receipt.pcs")} · {formatMoney(deposit.skins_total || 0)} RAP</b></span>
+        {deposit.payment_method !== "xrocket" && <span data-testid={`${testId}-skins-total`}>{t("receipt.skins")} <b className="text-[#ffb000]">{skins.length} {t("receipt.pcs")} · {formatMoney(deposit.skins_total || 0)} RAP</b></span>}
         <span data-testid={`${testId}-balance`}>{t("receipt.to_balance")} <b className="text-[#2ecc71]">{formatMoney(balance)} RAP</b></span>
         <span data-testid={`${testId}-total`}>{t("receipt.total")} <b>{formatMoney(deposit.credited ?? deposit.amount)} RAP</b></span>
       </div>

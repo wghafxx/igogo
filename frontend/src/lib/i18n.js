@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { xrocketRu, xrocketEn } from "./xrocket-i18n";
 
 const KEY = "bloxgrade_lang";
 
@@ -144,7 +145,7 @@ const ru = {
   "settings.spin_fast_desc": "Стрелка крутится более быстро, чтобы ускорить процесс игры",
   "settings.save": "Сохранить и закрыть",
 
-  "topup.title": "Пополнение скинами",
+  "topup.title": "Пополнение",
   "topup.skins": "Скины",
   "topup.rubles": "₽ Рубли",
   "topup.requests": "Мои заявки",
@@ -467,7 +468,7 @@ const en = {
   "settings.spin_fast_desc": "The pointer spins faster to speed up the game",
   "settings.save": "Save and close",
 
-  "topup.title": "Top up with skins",
+  "topup.title": "Top up",
   "topup.skins": "Skins",
   "topup.rubles": "₽ Rubles",
   "topup.requests": "My requests",
@@ -667,7 +668,7 @@ const en = {
   "docs.and": "·",
 };
 
-export const STR = { ru, en };
+export const STR = { ru: { ...ru, ...xrocketRu }, en: { ...en, ...xrocketEn } };
 
 const LangCtx = createContext({ lang: "ru", setLang: () => {}, t: (k) => k });
 

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Logo, RobuxIcon } from "../components/Logo";
 import { SkinCard } from "../components/SkinsSection";
 import TopUpModal, { PromoInput, DepositStatus } from "../components/TopUpModal";
+import XrocketPaymentActions from "../components/topup/XrocketPaymentActions";
 import { WalletIcon as PayIcon } from "../components/icons/wallet";
 import RobloxLinkCard from "../components/RobloxLinkCard";
 import Nick from "../components/Nick";
@@ -56,7 +57,7 @@ export default function ProfilePage() {
   const { t, lang } = useLang();
   const fmtDate = (d) => parseServerDate(d).toLocaleString(lang === "en" ? "en-US" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const [data, setData] = useState(null);
-  const [tab, setTab] = useState("inventory");
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("payment") === "xrocket" ? "payments" : "inventory");
   const [active, setActive] = useState(null);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -72,6 +73,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (authUser) load();
   }, [authUser, load]);
+
+  useEffect(() => {
+    if (!authUser || tab !== "payments") return;
+    const timer = setInterval(load, 15000);
+    window.addEventListener("bloxgrade:payment-confirmed", load);
+    return () => { clearInterval(timer); window.removeEventListener("bloxgrade:payment-confirmed", load); };
+  }, [authUser, tab, load]);
 
   if (!loading && !authUser) return <Navigate to="/" replace />;
 
@@ -243,6 +251,7 @@ export default function ProfilePage() {
                     <DepositStatus status={d.status} />
                     <span className="text-[#5f6377] w-24 text-right">{fmtDate(d.created_at)}</span>
                     <DepositReceipt deposit={d} compact testId={`profile-deposit-receipt-${d.id}`} />
+                    <XrocketPaymentActions deposit={d} onChanged={load} />
                   </div>
                 ))}
               </div>

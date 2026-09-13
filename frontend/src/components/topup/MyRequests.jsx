@@ -5,6 +5,7 @@ import { api, formatMoney, parseServerDate } from "../../lib/api";
 import { useLang } from "../../lib/i18n";
 import { DepositStatus } from "../TopUpModal";
 import { DepositReceipt } from "../DepositReceipt";
+import XrocketPaymentActions from "./XrocketPaymentActions";
 
 const fmtDate = (d, lang) => parseServerDate(d).toLocaleString(lang === "en" ? "en-US" : "ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -55,6 +56,7 @@ export default function MyRequests({ items, onChanged, onNew }) {
               )}
             </div>
             <DepositReceipt deposit={d} testId={`request-receipt-${d.id}`} />
+            <XrocketPaymentActions deposit={d} onChanged={onChanged} />
           </div>
         ))}
       </div>
