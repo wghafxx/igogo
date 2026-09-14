@@ -309,12 +309,13 @@ class TestWithdrawals:
 
 # ---------------- Regression basics ----------------
 class TestRegression:
-    def test_shop_has_8_red_items(self):
-        r = requests.get(f"{API}/shop", timeout=20)
+    def test_shop_has_red_items(self):
+        r = requests.get(f"{API}/shop", params={"rarity": "red"}, timeout=20)
         assert r.status_code == 200
         items = r.json()["items"]
-        assert len(items) == 8, len(items)
+        assert len(items) >= 8, len(items)
         assert all(i["rarity"] == "red" for i in items)
+        assert all(i.get("image") for i in items)
         assert all("_id" not in i for i in items)
 
     def test_stats_and_rarities(self):

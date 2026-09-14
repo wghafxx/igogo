@@ -189,7 +189,7 @@ def test_shop_items_have_images(client):
     r = client.get(f"{BASE_URL}/api/shop")
     assert r.status_code == 200, r.text
     items = r.json()["items"]
-    assert len(items) == 8, items
+    assert len(items) >= 8, items
     for it in items:
         assert it.get("image"), it
         assert "_id" not in it

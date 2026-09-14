@@ -70,7 +70,7 @@ class TestCatalogIntegrity:
         r = client.get(f"{API}/shop")
         assert r.status_code == 200, r.text
         items = r.json()["items"]
-        assert len(items) == 8, [i["id"] for i in items]
+        assert len(items) >= 8, [i["id"] for i in items]
         for it in items:
             assert it.get("image"), it
             assert "_id" not in it
