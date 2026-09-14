@@ -145,8 +145,6 @@ SHOP_ITEMS = [
     {"id": "stiletto-doodle", "type": "Stiletto", "name": "Doodle", "price": 8831.0, "rarity": "special", "image": f"{IMG}/80165507327550.png"},
     {"id": "operator-gloves-emerald-widow", "type": "Operator Gloves", "name": "Emerald Widow", "price": 16000.0, "rarity": "special", "image": f"{IMG}/93323651655129.png"},
     {"id": "karambit-scarlet", "type": "Karambit", "name": "Scarlet", "price": 19000.0, "rarity": "special", "image": f"{IMG}/93160113970136.png"},
-    {"id": "galil-feral", "type": "Galil AR", "name": "Feral", "price": 70.0, "rarity": "blue", "image": f"{IMG}/100237896129409.png"},
-    {"id": "usp-heated", "type": "USP-S", "name": "Heated", "price": 60.0, "rarity": "blue", "image": f"{IMG}/109389222580238.png"},
     {"id": "deagle-velocity", "type": "Desert Eagle", "name": "Velocity", "price": 120.0, "rarity": "purple", "image": f"{IMG}/99871777586907.png"},
     {"id": "p90-drft", "type": "P90", "name": "DRFT", "price": 180.0, "rarity": "red", "image": f"{IMG}/129912585396630.png"},
     {"id": "usp-ajax", "type": "USP-S", "name": "Ajax", "price": 320.0, "rarity": "pink", "image": f"{IMG}/128789343995926.png"},
@@ -1987,6 +1985,8 @@ async def ensure_indexes():
     await db.rain_settings.create_index("id", unique=True)
     for item in SHOP_ITEMS:
         await db.shop_items.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
+    # Убранные из каталога позиции исчезают из магазина (инвентари игроков и историю не трогаем).
+    await db.shop_items.delete_many({"id": {"$nin": [item["id"] for item in SHOP_ITEMS]}})
     # Never delete user inventory or historical drops as a side effect of restarting.
     for dep in await db.deposits.find({"status": "processing", "settlement_version": 1}, {"_id": 0}).to_list(None):
         try:
