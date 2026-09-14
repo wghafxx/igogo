@@ -200,7 +200,7 @@ class XrocketInvoiceIn(InputModel):
 
 class DepositIn(InputModel):
     description: str = Field(min_length=3, max_length=300)
-    expected_rap: float = Field(ge=35, le=1_000_000)
+    expected_rap: float = Field(ge=60, le=1_000_000)
     receiver_id: str = Field(min_length=1, max_length=32)
 
 
@@ -415,7 +415,7 @@ async def record_admin_fail(ip: str) -> None:
 
 
 DEPOSIT_FEE = 0.20
-MIN_DEPOSIT_RAP = 35
+MIN_DEPOSIT_RAP = 60
 DEPOSIT_COOLDOWN_SECONDS = 60
 ROBLOX_FRIEND_URL = "https://www.roblox.com/share?code=114adf7ac7b01243b752faf7c6c71b28&type=Profile&source=ProfileShare&stamp=1788366461111"
 RECEIVERS = [

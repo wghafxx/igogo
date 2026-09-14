@@ -99,7 +99,7 @@ class TestDeposit:
         assert r.status_code == 200
         d = r.json()
         assert "roblox.com/share" in d["friend_url"]
-        assert d["min_rap"] == 35
+        assert d["min_rap"] == 60
         assert d["fee"] == 0.2
 
 

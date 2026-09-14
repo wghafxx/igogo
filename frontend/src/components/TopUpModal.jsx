@@ -135,7 +135,7 @@ export default function TopUpModal({ open, onOpenChange }) {
 
           {tab === "rubles" && <RubTopUp onChanged={loadMine} />}
 
-          {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 35} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
+          {tab === "skins" && step === "amount" && <AmountStep ready={Boolean(info?.receivers?.length)} minRap={info?.min_rap ?? 60} rap={rap} setRap={setRap} onNext={() => setStep("receiver")} />}
           {tab === "skins" && step === "receiver" && (
             <ReceiverStep
               receivers={info?.receivers || []}

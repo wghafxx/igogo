@@ -81,7 +81,7 @@ class TestDepositInfo:
         assert r.status_code == 200
         d = r.json()
         assert d["cooldown"] == 60
-        assert d["min_rap"] == 35
+        assert d["min_rap"] == 60
         assert d["fee"] == 0.2
         recs = d["receivers"]
         assert isinstance(recs, list) and len(recs) >= 1
@@ -146,7 +146,7 @@ class TestCreateDeposit:
     def test_rate_limit_429(self, mongo, created):
         sid, s = make_user(mongo, "rate")
         created.append(sid)
-        p = {"description": "TEST_ first", "expected_rap": 50, "receiver_id": "ysrent1"}
+        p = {"description": "TEST_ first", "expected_rap": 100, "receiver_id": "ysrent1"}
         assert s.post(f"{API}/deposits", json=p).status_code == 200
         r2 = s.post(f"{API}/deposits", json={**p, "description": "TEST_ second"})
         assert r2.status_code == 429, r2.text
@@ -161,13 +161,13 @@ class TestCreateDeposit:
     def test_short_description_validation(self, mongo, created):
         sid, s = make_user(mongo, "desc")
         created.append(sid)
-        r = s.post(f"{API}/deposits", json={"description": "a", "expected_rap": 50, "receiver_id": "ysrent1"})
+        r = s.post(f"{API}/deposits", json={"description": "a", "expected_rap": 100, "receiver_id": "ysrent1"})
         assert r.status_code == 422, r.text
 
     def test_unknown_receiver(self, mongo, created):
         sid, s = make_user(mongo, "recv")
         created.append(sid)
-        r = s.post(f"{API}/deposits", json={"description": "TEST_ bad receiver", "expected_rap": 50, "receiver_id": "nobody"})
+        r = s.post(f"{API}/deposits", json={"description": "TEST_ bad receiver", "expected_rap": 100, "receiver_id": "nobody"})
         assert r.status_code == 400, r.text
         assert "не найден" in r.json()["detail"]
 
@@ -177,11 +177,11 @@ class TestCreateDeposit:
         # insert 5 pending directly (bypass cooldown) then attempt a 6th via API
         old = datetime.now(timezone.utc) - timedelta(seconds=600)
         mongo.deposits.insert_many([{
-            "id": str(uuid.uuid4()), "session_id": sid, "status": "pending", "expected_rap": 50,
+            "id": str(uuid.uuid4()), "session_id": sid, "status": "pending", "expected_rap": 100,
             "receiver_id": "ysrent1", "receiver_nick": "YSrent1", "description": "TEST_ seeded",
             "created_at": old, "resolved_at": None, "amount": None,
         } for _ in range(5)])
-        r = s.post(f"{API}/deposits", json={"description": "TEST_ sixth", "expected_rap": 50, "receiver_id": "ysrent1"})
+        r = s.post(f"{API}/deposits", json={"description": "TEST_ sixth", "expected_rap": 100, "receiver_id": "ysrent1"})
         assert r.status_code == 400, r.text
         assert "5 заявок" in r.json()["detail"]
 
