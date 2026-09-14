@@ -22,14 +22,14 @@ const PriceInput = ({ value, onChange, placeholder, testId, ariaLabel }) => (
       inputMode="decimal"
       aria-label={ariaLabel}
       placeholder={placeholder}
-      className="h-8 w-full min-w-0 pl-6 pr-1 rounded-md bg-[#0f1015] text-[12px] text-white placeholder:text-[#5f6377] outline-none focus:ring-1 focus:ring-[#00a2ff]"
+      className="h-9 w-full min-w-0 pl-6 pr-1 rounded-lg border border-[#30313b] bg-transparent text-[12px] text-white placeholder:text-[#7d8194] outline-none focus:ring-1 focus:ring-[#00a2ff]"
       data-testid={testId}
     />
   </div>
 );
 
 
-export default function SkinCatalog({ pageSize, title, compact = false, renderItem, testPrefix = "" }) {
+export default function SkinCatalog({ pageSize, title, headerAction, renderItem, testPrefix = "" }) {
   const { t } = useLang();
   const [sort, setSort] = useState("price_desc");
   const [minPrice, setMinPrice] = useState("");
@@ -86,23 +86,23 @@ export default function SkinCatalog({ pageSize, title, compact = false, renderIt
   const shopPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   return (<>
-        <PanelHeader title={title} compact={compact}>
-          <div className="w-full flex items-center gap-2 min-w-0" data-testid={`${testPrefix}catalog-controls`}>
+        <PanelHeader title={title}>
+          <div className="skin-catalog-controls" data-testid={`${testPrefix}catalog-controls`}>
             <Select value={sort} onValueChange={(value) => changeFilter(setSort, value)}>
-              <SelectTrigger className="h-8 w-[100px] shrink-0 bg-[#0f1015] border-0 text-[12px] text-white focus:ring-0" data-testid={`${testPrefix}sort-select`}>
+              <SelectTrigger className="skin-catalog-sort h-9 w-[88px] shrink-0 rounded-lg bg-[#0f1015] border-0 px-2 text-[12px] text-white focus:ring-0" aria-label={t(`skins.${sort}`)} title={t(`skins.${sort}`)} data-testid={`${testPrefix}sort-select`}>
                 <div className="flex items-center gap-1.5">
                   {sort === "price_desc" ? <TrendingDownIcon size={13} className="text-[#7d8194]" /> : <TrendingUpIcon size={13} className="text-[#7d8194]" />}
-                  <SelectValue />
+                  <span className="skin-sort-label"><SelectValue /></span>
                 </div>
               </SelectTrigger>
               <SelectContent className="bg-[#1c1d25] border-0 text-white">
-                <SelectItem value="price_desc" data-testid={`${testPrefix}sort-desc`} className="text-[12px] focus:bg-[#262833] focus:text-white">Цена ↓</SelectItem>
-                <SelectItem value="price_asc" data-testid={`${testPrefix}sort-asc`} className="text-[12px] focus:bg-[#262833] focus:text-white">Цена ↑</SelectItem>
+                <SelectItem value="price_desc" data-testid={`${testPrefix}sort-desc`} className="text-[12px] focus:bg-[#262833] focus:text-white">{t("skins.price_desc")}</SelectItem>
+                <SelectItem value="price_asc" data-testid={`${testPrefix}sort-asc`} className="text-[12px] focus:bg-[#262833] focus:text-white">{t("skins.price_asc")}</SelectItem>
               </SelectContent>
             </Select>
 
             <div
-              className={searchOpen ? "hidden" : "flex min-w-0 flex-1 items-center gap-2"}
+              className={searchOpen ? "hidden" : "skin-price-filters flex min-w-0 flex-1 items-center gap-1"}
               data-testid={`${testPrefix}price-filters`}
             >
               <PriceInput value={minPrice} onChange={(value) => changeFilter(setMinPrice, value)} placeholder={t("skins.from")} ariaLabel={t("skins.min_price")} testId={`${testPrefix}min-price-input`} />
@@ -110,13 +110,13 @@ export default function SkinCatalog({ pageSize, title, compact = false, renderIt
             </div>
 
             <div
-              className={`h-8 flex min-w-0 items-center rounded-md bg-[#0f1015] overflow-hidden ${searchOpen ? "flex-1" : "w-8 shrink-0"}`}
+              className={`h-9 flex min-w-0 items-center rounded-lg bg-[#0f1015] overflow-hidden ${searchOpen ? "flex-1" : "w-8 shrink-0"}`}
               data-testid={`${testPrefix}search-box`}
             >
               <AnimButton
                 icon={SearchIcon}
                 size={14}
-                className="w-8 h-8 shrink-0 flex items-center justify-center text-[#7d8194] hover:text-white transition-colors"
+                className="w-8 h-9 shrink-0 flex items-center justify-center text-[#7d8194] hover:text-white transition-colors"
                 onClick={openSearch}
                 aria-label={t("skins.search")}
                 title={t("skins.search")}
@@ -135,6 +135,7 @@ export default function SkinCatalog({ pageSize, title, compact = false, renderIt
               />
             </div>
           </div>
+          {headerAction}
         </PanelHeader>
         <SkinGrid pageSize={pageSize} testId={`${testPrefix}shop-grid`} overlay={
           loading ? <div className="rounded-lg bg-[#0d0e12] p-4 text-sm text-[#8e91a3]" data-testid={`${testPrefix}shop-loading`}>{t("skins.loading")}</div>

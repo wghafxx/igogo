@@ -17,7 +17,13 @@ const normalizeError = (error) => {
   else if (detail && typeof detail === "object") error.response.data.detail = fallback;
   return Promise.reject(error);
 };
-http.interceptors.response.use((response) => response, normalizeError);
+export const NOTIFICATIONS_CHANGED = "bloxgrade:notifications-changed";
+http.interceptors.response.use((response) => {
+  if (response.config.method === "post" && /^\/(deposits(?:\/|$)|skins\/withdraw$|payments\/xrocket\/invoices(?:\/|$))/.test(response.config.url)) {
+    window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
+  }
+  return response;
+}, normalizeError);
 http.interceptors.request.use((cfg) => {
   const t = getToken();
   if (t) cfg.headers.Authorization = `Bearer ${t}`;
@@ -52,6 +58,8 @@ export const api = {
   depositInfo: () => http.get(`/deposit/info`).then((r) => r.data),
   applyPromo: (code) => http.post(`/promo/apply`, { code }).then((r) => r.data),
   profile: () => http.get(`/profile`).then((r) => r.data),
+  notifications: () => http.get(`/notifications`).then((r) => r.data),
+  readNotifications: (read_through) => http.post(`/notifications/read`, { read_through }).then((r) => r.data),
   referrals: () => http.get(`/referrals`).then((r) => r.data),
   publicProfile: (discordId) => http.get(`/users/${discordId}`).then((r) => r.data),
   saveRoblox: (payload) => http.post(`/profile/roblox`, payload).then((r) => r.data),

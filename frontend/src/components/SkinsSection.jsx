@@ -104,10 +104,10 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, on
       <MobileTabs t={t} value={mobileTab} onChange={setMobileTab} />
       <div className={`blox-panel flex-col overflow-hidden ${mobileTab === "mine" ? "flex" : "hidden lg:flex"}`} data-testid="my-skins-panel">
         <div className={leftMode === "mine" ? "flex flex-1 flex-col" : "hidden"}>
-          <PanelHeader title={<InventoryTabs value="mine" onChange={setLeftMode} />}>
-            {authUser && <div className="ml-auto min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 min-h-8 px-2 py-1 rounded-md bg-[#0f1015]" title={t("skins.inventory_value_hint")} data-testid="inventory-value-chip">
-              <span className="text-[11px] text-[#8e91a3] whitespace-nowrap">{t("skins.inventory")} · {user?.skins?.length || 0}</span>
-              <span className="text-[13px] font-bold text-[#ffb000] tabular-nums flex items-center gap-1" data-testid="inventory-value">{formatMoney(inventoryTotal(user?.skins))} <RobuxIcon size={10} /></span>
+          <PanelHeader title={<><InventoryTabs value="mine" onChange={setLeftMode} /><span>{t("skins.mine")}</span></>}>
+            {authUser && <div className="ml-auto min-w-0 flex items-center gap-2 h-9 px-2 rounded-lg bg-[#0f1015] whitespace-nowrap" title={t("skins.inventory_value_hint")} data-testid="inventory-value-chip">
+              <span className="inventory-caption text-[11px] text-[#8e91a3]">{t("skins.inventory")} · {user?.skins?.length || 0}</span>
+              <span className="min-w-0 text-[13px] font-bold text-[#ffb000] tabular-nums flex items-center gap-1" data-testid="inventory-value"><span className="truncate">{formatMoney(inventoryTotal(user?.skins))}</span> <RobuxIcon size={10} className="shrink-0" /></span>
             </div>}
           </PanelHeader>
           {authUser ? <UserInventory key={user?.session_id || "inventory"} t={t} disabled={disabled} skins={user?.skins || []} pageSize={pageSize} onTopUp={onTopUp} selectedUids={betSkins.map((b) => b.uid)} onToggle={(skin) => { playTick(sound); onToggleBetSkin(skin); }} /> : <GuestInventory t={t} onLogin={openAuth} />}

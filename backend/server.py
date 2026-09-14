@@ -28,6 +28,7 @@ from functools import wraps
 from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
 from shop_purchase import purchase_skins
 from withdrawal_cancellation import cancel_withdrawal, finish_cancellation, resolve_history
+from notifications import operation_notifications
 from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
 import xrocket_payments as xp
 import referrals
@@ -152,6 +153,10 @@ class InputModel(BaseModel):
 
 class PresenceIn(InputModel):
     session_id: str = Field(min_length=1, max_length=64)
+
+
+class NotificationsReadIn(InputModel):
+    read_through: datetime
 
 
 class StatsOut(BaseModel):
@@ -1088,6 +1093,20 @@ async def skins_withdraw(payload: UidsIn, request: Request):
     return to_user_out(fresh)
 
 
+# ---------- Notifications ----------
+@api_router.get("/notifications")
+async def my_notifications(request: Request):
+    return await operation_notifications(db, await require_user(request))
+
+
+@api_router.post("/notifications/read")
+async def read_notifications(payload: NotificationsReadIn, request: Request):
+    user = await require_user(request)
+    read_at = min(as_utc(payload.read_through), now_utc())
+    await db.users.update_one({"session_id": user["session_id"]}, {"$max": {"notifications_read_at": read_at}})
+    return {"ok": True}
+
+
 # ---------- Deposits ----------
 def deposit_public(d: dict) -> dict:
     return {k: v for k, v in d.items() if k != "_id"}
@@ -1920,6 +1939,9 @@ async def ensure_indexes():
     await db.user_locks.create_index("session_id", unique=True)
     await db.item_history.create_index([("session_id", 1), ("created_at", -1)])
     await db.deposits.create_index([("status", 1), ("created_at", 1)])
+    for collection in (db.deposits, db.withdrawals):
+        await collection.create_index([("session_id", 1), ("created_at", -1), ("id", -1)])
+        await collection.create_index([("session_id", 1), ("resolved_at", -1), ("id", -1)])
     await db.withdrawals.create_index([("status", 1), ("created_at", 1)])
     await db.withdrawals.create_index("id", unique=True)
     await db.bank_ledger.create_index("created_at")

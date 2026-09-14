@@ -8,14 +8,13 @@ import { LinkIcon } from "./icons/link";
 import { Logo, RobuxIcon, VkIcon } from "./Logo";
 import AnimButton from "./AnimButton";
 import DiscordButton from "./DiscordButton";
-import { BellIcon } from "./icons/bell";
+import Notifications from "./Notifications";
 import { WalletIcon } from "./icons/wallet";
 import TelegramIcon from "./TelegramIcon";
 import { formatNumber, formatMoney } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import LangSwitcher from "./LangSwitcher";
 import { useAuth } from "../hooks/useAuth";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +29,7 @@ import Nick from "./Nick";
 const CHANNEL_URL = "https://t.me/bloxgrade";
 
 const StatBlock = ({ label, value, icon, mobile = false }) => (
-  <div className={`${mobile ? "flex" : "hidden md:flex"} items-center gap-2`}>
+  <div className={`${mobile ? "hidden min-[380px]:flex" : "hidden md:flex"} items-center gap-2`}>
     <span className="text-[#ffb000]">{icon}</span>
     <div className="leading-tight">
       <div className={`${mobile ? "hidden md:block" : ""} text-[11px] text-[#8e91a3] font-medium`}>{label}</div>
@@ -172,15 +171,7 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
               data-testid="topup-button-mobile"
             />
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <AnimButton icon={BellIcon} size={18} className="w-9 h-9 hidden sm:flex items-center justify-center text-[#9a9db0] hover:text-white transition-colors" data-testid="notifications-button" />
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 bg-[#16171d] border-0 text-white p-0 shadow-xl">
-                <div className="px-4 py-3 border-b border-[#262833] font-bold text-sm">{t("header.notifications")}</div>
-                <div className="px-4 py-8 text-center text-sm text-[#8e91a3]">{t("header.no_notifications")}</div>
-              </PopoverContent>
-            </Popover>
+            <Notifications key={authUser.session_id} />
 
             <ProfileMenu t={t} authUser={authUser} onLogout={logout} />
           </>

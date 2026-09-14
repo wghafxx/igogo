@@ -77,13 +77,11 @@ export default function SkinShop({ active, tabs, pageSize, user, disabled, onTop
   return (
     <>
       <div className={active ? "flex flex-1 flex-col" : "hidden"} data-testid="balance-store">
-        <div className="h-[52px] shrink-0 px-3 flex items-center gap-2">
-          {tabs}
-          <button type="button" onClick={() => setOpen(true)} className="ml-auto relative h-8 shrink-0 px-2.5 rounded-lg bg-[#ffb000] hover:bg-[#ffc233] text-black flex items-center gap-1.5 font-bold text-[12px]" aria-label={t("store.cart")} title={t("store.cart")} data-testid="store-cart-button">
+        {active && <SkinCatalog pageSize={pageSize} title={tabs} headerAction={
+          <button type="button" onClick={() => setOpen(true)} className="relative h-9 shrink-0 px-2 rounded-lg bg-[#ffb000] hover:bg-[#ffc233] text-black flex items-center gap-1 font-bold text-[12px]" aria-label={t("store.cart")} title={t("store.cart")} data-testid="store-cart-button">
             <ShoppingCart size={17} /> {count > 0 && <span data-testid="store-cart-count">{count}</span>}
           </button>
-        </div>
-        {active && <SkinCatalog pageSize={pageSize} compact testPrefix="store-" renderItem={(item) => {
+        } testPrefix="store-" renderItem={(item) => {
           const quantity = cart.find((row) => row.item.id === item.id)?.quantity || 0;
           return <div key={item.id} className={`relative rounded-lg ${quantity ? "ring-1 ring-[#ffb000]" : ""}`}>
             <SkinCard item={item} selected={quantity > 0} disabled={locked} onClick={() => change(item, 1)} testId={`store-skin-${item.id}`} />

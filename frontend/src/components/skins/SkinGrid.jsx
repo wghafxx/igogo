@@ -35,13 +35,15 @@ export const SkinCard = ({ item, onClick, selected, disabled, testId }) => {
   );
 };
 
-export const PanelHeader = ({ title, children, compact = false }) => (
-  <div className={`${compact ? "min-h-[52px]" : "min-h-[104px]"} px-3 py-2 flex flex-wrap items-center gap-2 sm:gap-3`}>
-    {typeof title === "string" && <div className="w-8 h-8 rounded-md bg-[#00a2ff] flex items-center justify-center shrink-0">
-      <Logo size={16} className="[&_path]:fill-white" />
-    </div>}
-    {title && <div className="font-bold text-[14px] whitespace-nowrap">{title}</div>}
-    {children}
+export const PanelHeader = ({ title, children }) => (
+  <div className="skin-panel-header">
+    <div className="skin-panel-toolbar">
+      {title && <div className="skin-panel-title">
+        {typeof title === "string" && <Logo size={15} className="shrink-0" />}
+        {title}
+      </div>}
+      {children}
+    </div>
   </div>
 );
 
