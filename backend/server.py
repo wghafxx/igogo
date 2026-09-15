@@ -1700,6 +1700,7 @@ async def admin_bank(request: Request):
         {"session_id": r["_id"], "nickname": (forced_users.get(r["_id"], {}) or {}).get("nickname") or "?", "count": r["count"]}
         for r in forced_rows
     ]
+    gifts = await promos.gift_stats(db)
     return {
         "bank": bank,
         "pool": await payout_pool(),
@@ -1709,6 +1710,8 @@ async def admin_bank(request: Request):
         "deposits_total": deposits_total,
         "withdrawals_total": withdrawals_total,
         "adjustments_total": adjustments_total,
+        "gifts_total": gifts["total"],
+        "gifts_count": gifts["count"],
         "rtp": st,
         "rtp_24h": rtp_24h,
         "forced_top": forced_top,

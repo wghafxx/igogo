@@ -453,6 +453,30 @@ async def apply_rap_gift(db, promo, user):
             "op": fresh_op}
 
 
+async def gift_stats(db):
+    """Issued gifts aggregate for BankTab: redeemed amount + count.
+
+    Gifts raise liabilities (balances) and cut net, but never touch bank/pool.
+    Uses the separate promo_gifts journal (one doc per redeemed issuance).
+    """
+    try:
+        rows = await db.promo_gifts.aggregate([
+            {"$group": {"_id": None, "total": {"$sum": "$amount_rap"}, "count": {"$sum": 1}}},
+        ]).to_list(1)
+    except Exception:
+        rows = []
+    if rows:
+        return {"total": round(float(rows[0].get("total") or 0), 2),
+                "count": int(rows[0].get("count") or 0)}
+    # Fallback for mocks without $sum support.
+    try:
+        docs = await db.promo_gifts.find({}, {"amount_rap": 1}).to_list(None)
+        return {"total": round(sum(float(d.get("amount_rap") or 0) for d in docs), 2),
+                "count": len(docs)}
+    except Exception:
+        return {"total": 0.0, "count": 0}
+
+
 async def resume_incomplete_gifts(db, limit=100):
     """Best-effort completion of crash-interrupted gifts (called on startup).
 

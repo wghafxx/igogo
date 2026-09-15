@@ -152,7 +152,7 @@ export default function BankTab({ refreshKey = 0 }) {
 
   if (!data) return <div className="blox-panel h-[160px] flex items-center justify-center text-[13px] text-[#5f6377]" data-testid="bank-loading">Загрузка…</div>;
 
-  const { bank, pool, liabilities, net, rtp, games, settings, ledger } = data;
+  const { bank, pool, liabilities, net, rtp, games, settings, ledger, gifts_total, gifts_count } = data;
   const rtp24 = data.rtp_24h || null;
   const forcedTop = data.forced_top || [];
   const warnThreshold = 0.2 * (Number(liabilities?.total) || 0);
@@ -174,6 +174,7 @@ export default function BankTab({ refreshKey = 0 }) {
         <Stat label="Чистая позиция (прибыль)" value={<>{net >= 0 ? "+" : ""}{formatMoney(net)} <RobuxIcon size={14} /></>} tone={health === "green" ? "text-[#2ecc71]" : health === "yellow" ? "text-[#ffb000]" : "text-[#ff5c5c]"} testId="bank-net" hint="банк − обязательства" />
         <Stat label="Фактический RTP" value={pct(rtp.rtp)} tone={rtp.rtp <= settings.rtp_target + 0.05 ? "text-[#2ecc71]" : "text-[#ffb000]"} testId="bank-rtp-actual" hint={`потолок ${Math.round(settings.rtp_target * 100)}% — выше подняться не может · поставлено ${formatMoney(rtp.wagered)} · выдано ${formatMoney(rtp.paid)}`} />
         <Stat label="Пул выдачи" value={<>{formatMoney(pool ?? 0)} <RobuxIcon size={14} /></>} tone={(pool ?? 0) > 0 ? "text-[#4b9dff]" : "text-[#ff5c5c]"} testId="bank-pool" hint={(pool ?? 0) <= 0 ? "пуст — выигрыши временно не выплачиваются" : "доступный бюджет на выигрыши: пополняется ставками × RTP"} />
+        <Stat label="Подарки выдано" value={<>{formatMoney(gifts_total ?? 0)} <RobuxIcon size={14} /></>} tone={(gifts_total ?? 0) > 0 ? "text-[#2ecc71]" : ""} testId="bank-gifts-total" hint={`${gifts_count ?? 0} выдач · растут обязательства и режут чистую позицию, банк и пул не трогают`} />
         <Stat label="RTP за 24ч" value={pct(rtp24 ? rtp24.rtp : 0)} tone={!rtp24 || rtp24.rtp <= settings.rtp_target + 0.05 ? "text-[#2ecc71]" : "text-[#ffb000]"} testId="bank-rtp-24h" hint={rtp24 ? `поставлено ${formatMoney(rtp24.wagered)} · выдано ${formatMoney(rtp24.paid)}` : "нет данных"} />
       </div>
 

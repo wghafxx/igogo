@@ -145,6 +145,15 @@ test("creating a RAP gift sends type, amount, limit and expiry", async () => {
   expect(byId("promo-editor")).toBeNull();
 });
 
+test("RAP editor shows total campaign budget and one-per-person rule", async () => {
+  await click("promo-add");
+  await setSelect("promo-type", "rap_fixed");
+  await setInput("promo-amount", "100");
+  await setInput("promo-max-uses", "25");
+  expect(byId("promo-budget").textContent).toContain("2");
+  expect(byId("promo-budget").textContent).toContain("1 человеку");
+});
+
 test("editing a RAP gift locks type and freezes amount after bookings", async () => {
   promos = [{ id: "g1", code: "GIFT", type: "rap_fixed", amount_rap: 50, max_uses: 5, unique_users: 2, used_count: 2 }];
   await act(async () => { root.render(<PromosTab refreshKey={8} />); });

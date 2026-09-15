@@ -160,7 +160,14 @@ export default function PromosTab({ refreshKey = 0 }) {
                       )}
                     </td>
                     <td className="px-4 py-3 font-bold text-[#ffb000] whitespace-nowrap">
-                      {isRap ? `${number(promo.amount_rap)} RAP` : `+${number(promo.percent)}%`}
+                      {isRap ? (
+                        <>
+                          {`${number(promo.amount_rap)} RAP`}
+                          <span className="block text-[11px] font-normal text-[#7d8194]">
+                            бюджет до {number(Number(promo.amount_rap || 0) * Number(promo.max_uses || 0))} RAP · 1 человеку — 1 раз
+                          </span>
+                        </>
+                      ) : `+${number(promo.percent)}%`}
                     </td>
                     <td className="px-4 py-3 font-bold tabular-nums" data-testid="promo-unique-users">
                       {isRap ? `${number(used)} / ${number(promo.max_uses)}` : number(promo.unique_users)}
@@ -242,6 +249,10 @@ export default function PromosTab({ refreshKey = 0 }) {
                     <input type="datetime-local" value={editor.expires_at || ""} onChange={(e) => setEditor({ ...editor, expires_at: e.target.value })} className={inputClass} data-testid="promo-expires" />
                     <span className="block mt-1 text-[11px] text-[#7d8194]">Пусто — бессрочно. Уже зарезервированные завершаются по сохранённым условиям.</span>
                   </label>
+                  <div className="rounded-lg bg-[#2ecc71]/10 px-3 py-2.5 text-[12px] text-[#9be7b8] leading-snug" data-testid="promo-budget">
+                    Бюджет акции: {number(Number(editor.amount_rap || 0) * Number(editor.max_uses || 0))} RAP
+                    <span className="block text-[11px] text-[#7d8194]">1 человеку — 1 раз по Discord. Выдачи растят обязательства и режут чистую позицию в Банке, банк и пул не трогают.</span>
+                  </div>
                 </>
               )}
               {formError && <p role="alert" className="text-[12px] text-[#ff8a8a]">{formError}</p>}

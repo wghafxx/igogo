@@ -541,6 +541,21 @@ def test_rap_gift_journal_lists_redemptions(promo_api, monkeypatch):
     assert api.request("GET", "/api/admin/promo-gifts", who="discord_1").status_code == 403
 
 
+def test_rap_gifts_hit_net_but_not_bank_or_pool(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "BANKTIE", 40, 5).status_code == 201
+    assert api.apply("banktie").status_code == 200
+    assert api.apply("banktie", "discord_2").status_code == 200
+    bank = api.request("GET", "/api/admin/bank").json()
+    assert bank["gifts_total"] == 80
+    assert bank["gifts_count"] == 2
+    # Liabilities grew by gifts, bank/pool untouched -> net cut by gifts.
+    assert bank["bank"] == 0
+    assert bank["liabilities"]["balances"] == 80
+    assert bank["net"] == -80
+
+
 def test_rap_real_mongo_races_if_available(promo_api, monkeypatch):
     """Same-account + last-slot races on a REAL MongoDB (not just mongomock).
 
