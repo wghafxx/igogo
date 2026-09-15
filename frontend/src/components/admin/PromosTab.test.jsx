@@ -109,3 +109,79 @@ test("empty list still allows creating a promo", async () => {
   await click("promo-add");
   expect(byId("promo-editor")).not.toBeNull();
 });
+
+const setSelect = async (id, value) => act(async () => {
+  const el = byId(id);
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, value);
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+});
+
+test("shows RAP gifts with amount, usage and expiry", async () => {
+  promos = [
+    { id: "g1", code: "GIFT", type: "rap_fixed", amount_rap: 100.5, max_uses: 10, unique_users: 3, used_count: 3, expires_at: "2030-05-01T12:00:00Z" },
+    { id: "pelmen", code: "PELMEN", percent: 10, unique_users: 7 },
+  ];
+  await act(async () => { root.render(<PromosTab refreshKey={7} />); });
+  const row = byId("promo-row-g1");
+  expect(row.textContent).toContain("100");
+  expect(row.textContent).toContain("RAP");
+  expect(row.textContent).toContain("RAP-подарок");
+  expect(row.querySelector('[data-testid="promo-unique-users"]').textContent).toContain("3");
+  expect(row.querySelector('[data-testid="promo-unique-users"]').textContent).toContain("10");
+  expect(row.textContent).not.toContain("+10%");
+});
+
+test("creating a RAP gift sends type, amount, limit and expiry", async () => {
+  await click("promo-add");
+  await setSelect("promo-type", "rap_fixed");
+  await setInput("promo-code", "GIFT100");
+  await setInput("promo-amount", "100.5");
+  await setInput("promo-max-uses", "25");
+  expect(byId("promo-amount").checkValidity()).toBe(true);
+  expect(byId("promo-max-uses").checkValidity()).toBe(true);
+  await click("promo-save");
+  expect(adminApi.createPromo).toHaveBeenCalledWith(
+    expect.objectContaining({ code: "GIFT100", type: "rap_fixed", amount_rap: 100.5, max_uses: 25 }));
+  expect(byId("promo-editor")).toBeNull();
+});
+
+test("editing a RAP gift locks type and freezes amount after bookings", async () => {
+  promos = [{ id: "g1", code: "GIFT", type: "rap_fixed", amount_rap: 50, max_uses: 5, unique_users: 2, used_count: 2 }];
+  await act(async () => { root.render(<PromosTab refreshKey={8} />); });
+  await click(document.querySelector('[aria-label="Редактировать GIFT"]'));
+  expect(byId("promo-type").value).toBe("rap_fixed");
+  expect(byId("promo-type").disabled).toBe(true);
+  expect(byId("promo-amount").value).toBe("50");
+  expect(byId("promo-amount").disabled).toBe(true);
+  await setInput("promo-max-uses", "8");
+  promos = [{ id: "g1", code: "GIFT", type: "rap_fixed", amount_rap: 50, max_uses: 8, unique_users: 2, used_count: 2 }];
+  await click("promo-save");
+  expect(adminApi.updatePromo).toHaveBeenCalledWith("g1",
+    expect.objectContaining({ type: "rap_fixed", amount_rap: 50, max_uses: 8 }));
+});
+
+test("invalid RAP amounts and limits cannot be submitted", async () => {
+  await click("promo-add");
+  await setSelect("promo-type", "rap_fixed");
+  await setInput("promo-code", "GIFT");
+  for (const bad of ["0", "-5", "100000.01", "10.001", ""]) {
+    await setInput("promo-amount", bad);
+    expect(byId("promo-amount").checkValidity()).toBe(false);
+  }
+  await setInput("promo-amount", "10");
+  for (const bad of ["0", "-1", "100001", "2.5", ""]) {
+    await setInput("promo-max-uses", bad);
+    expect(byId("promo-max-uses").checkValidity()).toBe(false);
+  }
+  await click("promo-save");
+  expect(adminApi.createPromo).not.toHaveBeenCalled();
+});
+
+test("RAP delete dialog warns that issued gifts stay", async () => {
+  promos = [{ id: "g1", code: "GIFT", type: "rap_fixed", amount_rap: 10, max_uses: 5, unique_users: 1, used_count: 1 }];
+  await act(async () => { root.render(<PromosTab refreshKey={9} />); });
+  await click(document.querySelector('[aria-label="Удалить GIFT"]'));
+  expect(byId("promo-delete-dialog").textContent).toContain("не отзовётся");
+  await click("promo-delete-confirm");
+  expect(adminApi.deletePromo).toHaveBeenLastCalledWith("g1");
+});

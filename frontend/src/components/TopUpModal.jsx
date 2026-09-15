@@ -5,9 +5,10 @@ import { BoxesIcon } from "./icons/boxes";
 import { FileTextIcon } from "./icons/file-text";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { api, pct } from "../lib/api";
+import { api, pct, formatMoney } from "../lib/api";
 import { useLang } from "../lib/i18n";
 import { useAuth } from "../hooks/useAuth";
+import { useSessionCtx } from "../hooks/useSessionCtx";
 import AmountStep from "./topup/AmountStep";
 import ReceiverStep from "./topup/ReceiverStep";
 import RubTopUp from "./topup/RubTopUp";
@@ -18,13 +19,16 @@ const SUPPORT_URL = process.env.REACT_APP_TELEGRAM_SUPPORT_URL || "https://t.me/
 
 export const PromoInput = ({ compact = false }) => {
   const { authUser, setAuthUser } = useAuth();
+  const sessionCtx = useSessionCtx();
   const { t } = useLang();
   const [code, setCode] = useState(authUser?.promo_code || "");
   const [busy, setBusy] = useState(false);
+  const [gift, setGift] = useState(null);
   useEffect(() => {
     if (authUser?.promo_code) setCode(authUser.promo_code);
   }, [authUser?.promo_code]);
   const active = authUser?.promo_code && authUser.promo_code === code.trim().toUpperCase();
+  const giftActive = gift && gift.code === code.trim().toUpperCase();
 
   const apply = async () => {
     if (!code.trim() || busy) return;
@@ -32,7 +36,24 @@ export const PromoInput = ({ compact = false }) => {
     try {
       const u = await api.applyPromo(code.trim());
       setAuthUser(u);
-      toast.success(`${t("topup.promo_word")} ${u.promo_code} ${t("topup.promo_ok")}: +${pct(u.promo_bonus)}% ${t("topup.promo_topup_bonus")}`);
+      // Header balance lives in useSession state — one setAuthUser() is not enough.
+      try {
+        sessionCtx?.setUser?.((prev) => ({
+          ...(prev || {}),
+          balance: u.balance,
+          promo_code: u.promo_code,
+          promo_bonus: u.promo_bonus,
+        }));
+      } catch { /* session stays consistent via next poll */ }
+      if (u.gift_type === "rap_fixed") {
+        const upper = code.trim().toUpperCase();
+        setGift({ code: upper, amount: u.gift_amount, already: Boolean(u.gift_already_received) });
+        if (u.gift_already_received) toast.success(t("topup.promo_gift_already"));
+        else toast.success(`${t("topup.promo_gift_done")} ${formatMoney(u.gift_amount)} RAP`);
+      } else {
+        setGift(null);
+        toast.success(`${t("topup.promo_word")} ${u.promo_code} ${t("topup.promo_ok")}: +${pct(u.promo_bonus)}% ${t("topup.promo_topup_bonus")}`);
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || t("topup.promo_fail"));
     } finally {
@@ -46,7 +67,7 @@ export const PromoInput = ({ compact = false }) => {
         <TicketIcon size={16} className="text-[#ffb000] shrink-0" />
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onChange={(e) => { setCode(e.target.value.toUpperCase()); }}
           onKeyDown={(e) => e.key === "Enter" && apply()}
           placeholder={t("topup.promo_placeholder")}
           maxLength={32}
@@ -56,16 +77,22 @@ export const PromoInput = ({ compact = false }) => {
         <button
           onClick={apply}
           disabled={busy || !code.trim() || !authUser}
-          className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors ${active ? "bg-[#2ecc71] text-black" : "bg-[#00a2ff] text-white hover:bg-[#1ab0ff]"} disabled:opacity-40`}
+          className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors ${active || giftActive ? "bg-[#2ecc71] text-black" : "bg-[#00a2ff] text-white hover:bg-[#1ab0ff]"} disabled:opacity-40`}
           data-testid="promo-apply-button"
         >
-          {active ? <CheckIcon size={16} /> : "Применить"}
+          {active || giftActive ? <CheckIcon size={16} /> : "Применить"}
         </button>
       </div>
-      {authUser?.promo_bonus > 0 && !compact && (
-        <div className="mt-2 h-8 rounded-md bg-[#ffb000]/15 text-[#ffb000] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-bonus">
-          +{pct(authUser.promo_bonus)}% {t("topup.promo_bonus")}
+      {giftActive ? (
+        <div className="mt-2 h-8 rounded-md bg-[#2ecc71]/15 text-[#2ecc71] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-gift">
+          {gift.already ? t("topup.promo_gift_already") : `${t("topup.promo_gift_done")} ${formatMoney(gift.amount)} RAP`}
         </div>
+      ) : (
+        authUser?.promo_bonus > 0 && !compact && (
+          <div className="mt-2 h-8 rounded-md bg-[#ffb000]/15 text-[#ffb000] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-bonus">
+            +{pct(authUser.promo_bonus)}% {t("topup.promo_bonus")}
+          </div>
+        )
       )}
     </div>
   );

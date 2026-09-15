@@ -5,7 +5,8 @@ Install backend/requirements-test.txt, then run pytest tests/test_promotions.py.
 
 import asyncio
 import hashlib
-from datetime import timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import httpx
@@ -254,3 +255,381 @@ def test_deposits_freeze_terms_but_new_requests_resolve_edits_and_deletions(prom
     assert asyncio.run(api.db.deposits.find_one({"id": original["id"]}))["promo_bonus"] == .1
     assert asyncio.run(api.db.deposits.find_one({"id": changed["id"]}))["promo_bonus"] == .2
     assert asyncio.run(api.db.promo_activations.count_documents({"promo_id": "default-pelmen"})) == 1
+
+
+# ---------------------------------------------------------------------------
+# rap_fixed: instant RAP gifts (disabled by default until budget is approved)
+# ---------------------------------------------------------------------------
+
+def _enable_rap(monkeypatch):
+    monkeypatch.setenv("RAP_FIXED_ENABLED", "1")
+
+
+def _create_rap(api, code="GIFT100", amount=100, max_uses=10, expires_at=None):
+    body = {"code": code, "type": "rap_fixed", "amount_rap": amount, "max_uses": max_uses}
+    if expires_at is not None:
+        body["expires_at"] = expires_at
+    return api.request("POST", "/api/admin/promos", json=body)
+
+
+def _balance(api, who="discord_1"):
+    async def get():
+        doc = await api.db.users.find_one({"session_id": who}, {"balance": 1})
+        return float((doc or {}).get("balance") or 0)
+    return asyncio.run(get())
+
+
+def test_rap_disabled_by_default_blocks_create_and_apply(promo_api, monkeypatch):
+    api = promo_api
+    monkeypatch.delenv("RAP_FIXED_ENABLED", raising=False)
+    created = api.request("POST", "/api/admin/promos", json={
+        "code": "GIFTX", "type": "rap_fixed", "amount_rap": 10, "max_uses": 5})
+    assert created.status_code == 400, created.text
+    assert "отключены" in created.json()["detail"]
+    # Prepare a gift while enabled, then disable and try to apply.
+    monkeypatch.setenv("RAP_FIXED_ENABLED", "1")
+    assert _create_rap(api, "GIFTX", 10, 5).status_code == 201
+    monkeypatch.delenv("RAP_FIXED_ENABLED", raising=False)
+    response = api.apply("giftx")
+    assert response.status_code == 400, response.text
+    assert "отключены" in response.json()["detail"]
+    assert _balance(api) == 0
+    assert api.promos()["GIFTX"]["unique_users"] == 0
+
+
+def test_rap_happy_path_keeps_percent_and_reports_gift(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    api.apply("pelmen")
+    before = api.request("GET", "/api/auth/me", who="discord_1").json()
+    assert before["promo_code"] == "PELMEN" and before["promo_bonus"] == 0.1
+    assert _create_rap(api, "GIFT100", 100.5, 10).status_code == 201
+    first = api.apply("gift100")
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["gift_type"] == "rap_fixed"
+    assert body["gift_amount"] == 100.5
+    assert body["gift_already_received"] is False
+    assert body["balance"] == 100.5
+    # Active percent bonus is untouched.
+    assert body["promo_code"] == "PELMEN" and body["promo_bonus"] == 0.1
+    second = api.apply("GIFT100")
+    assert second.status_code == 200, second.text
+    assert second.json()["gift_already_received"] is True
+    assert second.json()["balance"] == 100.5
+    assert second.json()["promo_code"] == "PELMEN"
+    assert api.promos()["GIFT100"]["unique_users"] == 1
+    # Second account gets its own issuance.
+    assert api.apply("gift100", "discord_2").json()["gift_already_received"] is False
+    assert _balance(api, "discord_2") == 100.5
+    assert api.promos()["GIFT100"]["unique_users"] == 2
+    # Separate gift journal, no fictitious deposit / bank / referral writes.
+    async def check():
+        assert await api.db.deposits.count_documents({}) == 0
+        assert await api.db.promo_gifts.count_documents({}) == 2
+        assert await api.db.promo_activations.count_documents({}) >= 1
+        gifts = await api.db.promo_gifts.find({}).to_list(None)
+        assert sorted(g["amount_rap"] for g in gifts) == [100.5, 100.5]
+        assert await api.db.referral_rewards.count_documents({}) == 0
+    asyncio.run(check())
+
+
+def test_rap_parallel_same_account_credits_once(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "PARA", 25, 10).status_code == 201
+
+    async def burst():
+        return await asyncio.gather(*[
+            api.send("POST", "/api/promo/apply", who="discord_1", json={"code": "PARA"})
+            for _ in range(12)
+        ])
+    responses = asyncio.run(burst())
+    assert all(r.status_code == 200 for r in responses), [r.text for r in responses]
+    flags = [r.json()["gift_already_received"] for r in responses]
+    assert flags.count(False) == 1 and flags.count(True) == 11
+    assert _balance(api) == 25
+    assert api.promos()["PARA"]["unique_users"] == 1
+
+
+def test_rap_last_slot_race_two_accounts_only_one_wins(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "LAST1", 40, 1).status_code == 201
+
+    async def race():
+        return await asyncio.gather(*[
+            api.send("POST", "/api/promo/apply", who=who, json={"code": "LAST1"})
+            for who in ("discord_1", "discord_2")
+        ])
+    first, second = asyncio.run(race())
+    statuses = sorted([first.status_code, second.status_code])
+    assert statuses == [200, 409], (first.text, second.text)
+    winner = first if first.status_code == 200 else second
+    loser = second if winner is first else first
+    assert "исчерпан" in loser.json()["detail"]
+    assert winner.json()["gift_amount"] == 40
+    total = _balance(api, "discord_1") + _balance(api, "discord_2")
+    assert total == 40
+    assert api.promos()["LAST1"]["unique_users"] == 1
+
+
+def test_rap_requires_discord_account(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "NEEDDISC", 10, 5).status_code == 201
+    asyncio.run(api.db.users.insert_one({
+        "session_id": "guest-1", "nickname": "Guest", "balance": 0, "skins": []}))
+    response = api.apply("needdisc", "guest-1")
+    assert response.status_code == 400, response.text
+    assert "Discord" in response.json()["detail"]
+    assert api.promos()["NEEDDISC"]["unique_users"] == 0
+
+
+@pytest.mark.parametrize("body", [
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 0, "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": -5, "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10.001, "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": "NaN", "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": "Infinity", "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 100001, "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10},
+    {"code": "R1", "type": "rap_fixed", "max_uses": 5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10, "max_uses": 0},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10, "max_uses": -3},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10, "max_uses": 2.5},
+    {"code": "R1", "type": "rap_fixed", "amount_rap": 10, "max_uses": 5, "percent": 5},
+    {"code": "R1", "type": "deposit_percent", "percent": 10, "amount_rap": 5},
+    {"code": "R1", "type": "deposit_percent", "percent": 10, "max_uses": 5},
+    {"code": "R1", "type": "deposit_percent", "percent": 10, "expires_at": "2030-01-01T00:00:00Z"},
+])
+def test_rap_invalid_payloads_rejected(promo_api, monkeypatch, body):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    response = api.request("POST", "/api/admin/promos", json=body)
+    assert response.status_code == 422, (body, response.text)
+
+
+def test_rap_forbids_type_change_and_amount_freeze(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    pid = _create_rap(api, "FREEZE", 50, 5).json()["id"]
+    assert api.apply("freeze").status_code == 200
+    assert api.request("PUT", f"/api/admin/promos/{pid}", json={
+        "code": "FREEZE", "type": "deposit_percent", "percent": 10}).status_code == 400
+    assert api.request("PUT", f"/api/admin/promos/{pid}", json={
+        "code": "FREEZE", "type": "rap_fixed", "amount_rap": 60, "max_uses": 5}).status_code == 400
+    assert api.request("PUT", f"/api/admin/promos/{pid}", json={
+        "code": "FREEZE", "type": "rap_fixed", "amount_rap": 50, "max_uses": 0}).status_code in (400, 422)
+    # Growing the limit and renaming are allowed; stats survive the rename.
+    assert api.request("PUT", f"/api/admin/promos/{pid}", json={
+        "code": "FROZEN2", "type": "rap_fixed", "amount_rap": 50, "max_uses": 8}).status_code == 200
+    assert api.promos()["FROZEN2"]["unique_users"] == 1
+    assert api.apply("freeze").status_code == 400
+
+
+def test_rap_same_discord_different_session_no_double(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "SESS", 30, 10).status_code == 201
+    assert api.apply("sess").json()["gift_already_received"] is False
+    asyncio.run(api.db.users.insert_one(
+        {"session_id": "another-session", "discord_id": "1", "nickname": "Alt", "balance": 0, "skins": []}))
+    second = api.apply("sess", "another-session")
+    assert second.status_code == 200, second.text
+    assert second.json()["gift_already_received"] is True
+    assert _balance(api, "another-session") == 0
+    assert _balance(api, "discord_1") == 30
+    assert api.promos()["SESS"]["unique_users"] == 1
+
+
+def test_rap_deletion_keeps_issued_but_blocks_new(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    pid = _create_rap(api, "TODEL", 15, 5).json()["id"]
+    assert api.apply("todel").status_code == 200
+    assert api.request("DELETE", f"/api/admin/promos/{pid}").status_code == 200
+    # Issued balance is NOT revoked.
+    assert _balance(api) == 15
+    assert api.apply("todel").status_code == 400
+    assert _balance(api) == 15
+
+
+def test_rap_expiry_blocks_new_activations(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    assert _create_rap(api, "OLD", 10, 5, expires_at=past).status_code == 201
+    assert api.apply("old").status_code == 400
+    assert _balance(api) == 0
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    pid = _create_rap(api, "SOON", 10, 5, expires_at=future).json()["id"]
+    assert api.apply("soon").status_code == 200
+    # Expire it after the booking: repeats are already redeemed (idempotent),
+    # new accounts are blocked.
+    api.request("PUT", f"/api/admin/promos/{pid}", json={
+        "code": "SOON", "type": "rap_fixed", "amount_rap": 10, "max_uses": 5,
+        "expires_at": past})
+    assert api.apply("soon", "discord_2").status_code == 400
+    assert _balance(api, "discord_2") == 0
+
+
+def test_rap_reserved_completes_after_delete_or_expire_via_resume(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    pid = _create_rap(api, "CRASH", 77, 5).json()["id"]
+
+    async def book_without_credit():
+        promo = await api.db.promo_codes.find_one({"id": pid})
+        await api.server.promos.reserve_rap_slot(api.db, pid, "discord:1")
+        await api.db.promo_gift_ops.update_one(
+            {"promo_id": pid, "account_key": "discord:1"},
+            {"$setOnInsert": {
+                "promo_id": pid, "account_key": "discord:1", "session_id": "discord_1",
+                "discord_id": "1", "amount_rap": 77.0, "promo_code": "CRASH",
+                "created_at": api.server.now_utc()}},
+            upsert=True)
+        await api.db.promo_gift_ops.update_one(
+            {"promo_id": pid, "account_key": "discord:1"},
+            {"$set": {"status": "reserved", "reserved_at": api.server.now_utc(),
+                      "updated_at": api.server.now_utc()}})
+    asyncio.run(book_without_credit())
+    assert _balance(api) == 0
+    # Delete while reserved: startup recovery must still settle per saved terms.
+    assert api.request("DELETE", f"/api/admin/promos/{pid}").status_code == 200
+    resumed = asyncio.run(api.server.promos.resume_incomplete_gifts(api.db))
+    assert resumed == 1
+    assert _balance(api) == 77
+    gifts = asyncio.run(api.db.promo_gifts.find({}).to_list(None))
+    assert len(gifts) == 1 and gifts[0]["amount_rap"] == 77
+
+
+def test_rap_recreation_warns_and_starts_new_counter(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    pid = _create_rap(api, "REUSE", 20, 5).json()["id"]
+    assert api.apply("reuse").status_code == 200
+    assert api.request("DELETE", f"/api/admin/promos/{pid}").status_code == 200
+    recreated = _create_rap(api, "reuse", 20, 5)
+    assert recreated.status_code == 201, recreated.text
+    assert "warning" in recreated.json()
+    assert "новая акция" in recreated.json()["warning"]
+    assert recreated.json()["id"] != pid
+    assert recreated.json()["unique_users"] == 0
+    # Same Discord account may take the NEW promo (new promo_id => new issuance).
+    assert api.apply("reuse").json()["gift_already_received"] is False
+    assert _balance(api) == 40
+
+
+def test_rap_rate_limit_blocks_flood(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "FLOOD", 1, 1000).status_code == 201
+    statuses = [api.apply("flood").status_code for _ in range(31)]
+    assert statuses[-1] == 429
+    assert "минуту" in api.apply("flood").json()["detail"]
+
+
+def test_rap_gift_journal_lists_redemptions(promo_api, monkeypatch):
+    _enable_rap(monkeypatch)
+    api = promo_api
+    assert _create_rap(api, "JOUR", 12, 5).status_code == 201
+    assert api.apply("jour").status_code == 200
+    response = api.request("GET", "/api/admin/promo-gifts", who="admin")
+    assert response.status_code == 200, response.text
+    assert any(g["promo_code"] == "JOUR" and g["amount_rap"] == 12 for g in response.json())
+    assert api.request("GET", "/api/admin/promo-gifts", who="discord_1").status_code == 403
+
+
+def test_rap_real_mongo_races_if_available(promo_api, monkeypatch):
+    """Same-account + last-slot races on a REAL MongoDB (not just mongomock).
+
+    Skipped when no MongoDB is reachable; mongomock-only races are covered above.
+    """
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+    except Exception:
+        pytest.skip("motor not available")
+    url = os.environ.get("MONGO_URL", "mongodb://127.0.0.1:27017")
+
+    async def probe():
+        client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=800)
+        try:
+            await client.admin.command("ping")
+            return client
+        except Exception:
+            try:
+                client.close()
+            except Exception:
+                pass
+            return None
+    client = asyncio.run(probe())
+    if client is None:
+        pytest.skip("no real MongoDB reachable")
+    try:
+        _enable_rap(monkeypatch)
+        api = promo_api
+        server = api.server
+        real_db = client["rap_race_test"]
+        async def setup():
+            for name in ("promo_codes", "promo_gift_ops", "promo_gifts", "users", "migrations"):
+                try:
+                    await real_db.drop_collection(name)
+                except Exception:
+                    pass
+            await server.ensure_promotions(real_db)
+            await real_db.users.insert_many([{
+                "session_id": f"discord_{i}", "discord_id": str(i),
+                "nickname": f"P{i}", "balance": 0, "skins": []} for i in (1, 2)])
+        asyncio.run(setup())
+        promo_id = "race-real-1"
+
+        async def seed():
+            await real_db.promo_codes.insert_one({
+                "id": promo_id, "code": "REALRACE", "type": "rap_fixed",
+                "amount_rap": 10.0, "max_uses": 5, "expires_at": None,
+                "reserved_count": 0, "reserved_keys": [],
+                "gold_nick": False, "deleted": False,
+                "created_at": datetime.now(timezone.utc)})
+        asyncio.run(seed())
+
+        async def one_apply():
+            promo = await real_db.promo_codes.find_one({"id": promo_id})
+            user = await real_db.users.find_one({"session_id": "discord_1"})
+            return await server.promos.apply_rap_gift(real_db, promo, user)
+
+        async def burst_same():
+            return await asyncio.gather(*[one_apply() for _ in range(10)])
+        results = asyncio.run(burst_same())
+        assert sum(1 for r in results if not r["already"]) == 1
+        user = asyncio.run(real_db.users.find_one({"session_id": "discord_1"}))
+        assert float(user["balance"]) == 10.0
+
+        # Last slot with two different accounts.
+        async def wipe():
+            await real_db.promo_codes.update_one(
+                {"id": promo_id}, {"$set": {"max_uses": 1, "reserved_count": 0, "reserved_keys": []}})
+            await real_db.promo_gift_ops.delete_many({})
+            await real_db.promo_gifts.delete_many({})
+            await real_db.users.update_many({}, {"$set": {"balance": 0}, "$unset": {"claimed_promo_gifts": ""}})
+        asyncio.run(wipe())
+
+        async def apply_as(sid):
+            promo = await real_db.promo_codes.find_one({"id": promo_id})
+            user = await real_db.users.find_one({"session_id": sid})
+            return await server.promos.apply_rap_gift(real_db, promo, user)
+
+        async def race_last():
+            return await asyncio.gather(apply_as("discord_1"), apply_as("discord_2"), return_exceptions=True)
+        outcomes = asyncio.run(race_last())
+        ok = [o for o in outcomes if not isinstance(o, Exception)]
+        errors = [o for o in outcomes if isinstance(o, Exception)]
+        assert len(ok) == 1 and len(errors) == 1
+        balances = asyncio.run(real_db.users.find({}).to_list(None))
+        assert sum(float(u.get("balance") or 0) for u in balances) == 10.0
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+

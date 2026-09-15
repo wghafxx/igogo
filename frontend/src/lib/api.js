@@ -111,6 +111,7 @@ export const adminApi = {
   createPromo: (payload) => adminHttp.post(`/admin/promos`, payload).then((r) => r.data),
   updatePromo: (id, payload) => adminHttp.put(`/admin/promos/${encodeURIComponent(id)}`, payload).then((r) => r.data),
   deletePromo: (id) => adminHttp.delete(`/admin/promos/${encodeURIComponent(id)}`).then((r) => r.data),
+  promoGifts: (promoId, limit = 100) => adminHttp.get(`/admin/promo-gifts`, { params: { promo_id: promoId, limit } }).then((r) => r.data),
   deposits: (status) => adminHttp.get(`/admin/deposits`, { params: { status } }).then((r) => r.data),
   confirm: (id, rap, note) => adminHttp.post(`/admin/deposits/${id}/confirm`, { rap, note }).then((r) => r.data),
   depositPreview: (id, rap) => adminHttp.post(`/admin/deposits/${id}/preview`, { rap }).then((r) => r.data),

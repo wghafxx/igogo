@@ -5,6 +5,7 @@ import { TicketIcon } from "../icons/ticket";
 import { RobuxIcon } from "../Logo";
 import { api, formatMoney, DEPOSIT_FEE, pct } from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import { useSessionCtx } from "../../hooks/useSessionCtx";
 import { useLang } from "../../lib/i18n";
 
 const QUICK = [50, 100, 250, 500, 1000];
@@ -13,11 +14,14 @@ export const calcCredit = (rap, bonus) => Math.round(rap * (1 - DEPOSIT_FEE) * (
 
 export default function AmountStep({ minRap, rap, setRap, onNext, ready }) {
   const { authUser, setAuthUser, openAuth } = useAuth();
+  const sessionCtx = useSessionCtx();
   const { t } = useLang();
   const [code, setCode] = useState(authUser?.promo_code || "");
   const [busy, setBusy] = useState(false);
+  const [gift, setGift] = useState(null);
   const bonus = authUser?.promo_bonus || 0;
   const active = Boolean(authUser?.promo_code) && authUser.promo_code === code.trim().toUpperCase();
+  const giftActive = gift && gift.code === code.trim().toUpperCase();
   const num = Number(rap) || 0;
   const tooSmall = num > 0 && num < minRap;
   const credit = calcCredit(num, bonus);
@@ -29,7 +33,22 @@ export default function AmountStep({ minRap, rap, setRap, onNext, ready }) {
     try {
       const u = await api.applyPromo(code.trim());
       setAuthUser(u);
-      toast.success(`${t("topup.promo_word")} ${u.promo_code}: +${pct(u.promo_bonus)}% ${t("topup.promo_bonus")}`);
+      try {
+        sessionCtx?.setUser?.((prev) => ({
+          ...(prev || {}),
+          balance: u.balance,
+          promo_code: u.promo_code,
+          promo_bonus: u.promo_bonus,
+        }));
+      } catch { /* next poll restores consistency */ }
+      if (u.gift_type === "rap_fixed") {
+        setGift({ code: code.trim().toUpperCase(), amount: u.gift_amount, already: Boolean(u.gift_already_received) });
+        if (u.gift_already_received) toast.success(t("topup.promo_gift_already"));
+        else toast.success(`${t("topup.promo_gift_done")} ${formatMoney(u.gift_amount)} RAP`);
+      } else {
+        setGift(null);
+        toast.success(`${t("topup.promo_word")} ${u.promo_code}: +${pct(u.promo_bonus)}% ${t("topup.promo_bonus")}`);
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || t("topup.promo_fail"));
     } finally {
@@ -80,10 +99,16 @@ export default function AmountStep({ minRap, rap, setRap, onNext, ready }) {
           <CheckIcon size={16} />
         </button>
       </div>
-      {bonus > 0 && (
-        <div className="h-8 rounded-md bg-[#ffb000]/15 text-[#ffb000] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-bonus">
-          +{pct(bonus)}% {t("topup.promo_bonus")}
+      {giftActive ? (
+        <div className="h-8 rounded-md bg-[#2ecc71]/15 text-[#2ecc71] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-gift">
+          {gift.already ? t("topup.promo_gift_already") : `${t("topup.promo_gift_done")} ${formatMoney(gift.amount)} RAP`}
         </div>
+      ) : (
+        bonus > 0 && (
+          <div className="h-8 rounded-md bg-[#ffb000]/15 text-[#ffb000] text-[12px] font-bold flex items-center justify-center uppercase tracking-wide" data-testid="promo-bonus">
+            +{pct(bonus)}% {t("topup.promo_bonus")}
+          </div>
+        )
       )}
 
       <button

@@ -18,8 +18,8 @@ import secrets
 from collections import deque
 from decimal import Decimal
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import List, Literal, Optional
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+from typing import List, Literal, Optional, Any
 from urllib.parse import urlencode
 import uuid
 import hashlib
@@ -29,6 +29,7 @@ from deposit_settlement import confirm_deposit, plan_deposit, settle_deposit
 from shop_purchase import purchase_skins
 from withdrawal_cancellation import cancel_withdrawal, finish_cancellation, resolve_history
 from notifications import operation_notifications
+import promotions as promos
 from promotions import ensure_promotions, promo_fields, record_activation, refresh_user_promo
 import xrocket_payments as xp
 import referrals
@@ -192,6 +193,11 @@ class UserOut(BaseModel):
     roblox_nick: Optional[str] = None
     roblox_link: Optional[str] = None
     gold_nick: bool = False
+    # Instant RAP gift result (rap_fixed only; None for ordinary responses).
+    # Kept optional for backwards compatibility: old clients ignore these.
+    gift_type: Optional[Literal["deposit_percent", "rap_fixed"]] = None
+    gift_amount: Optional[float] = None
+    gift_already_received: Optional[bool] = None
 
 
 class RobloxIn(InputModel):
@@ -205,7 +211,42 @@ class PromoIn(InputModel):
 
 class AdminPromoIn(InputModel):
     code: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
-    percent: Decimal = Field(gt=0, le=50, decimal_places=2)
+    # Backwards compatible: requests without `type` are deposit_percent.
+    type: Literal["deposit_percent", "rap_fixed"] = "deposit_percent"
+    percent: Optional[Decimal] = Field(default=None, gt=0, le=50, decimal_places=2)
+    amount_rap: Optional[Decimal] = None
+    max_uses: Optional[int] = None
+    expires_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def check_promo_consistency(self):
+        kind = self.type or "deposit_percent"
+        if kind == "deposit_percent":
+            if self.percent is None:
+                raise ValueError("Для процентного промокода нужен percent")
+            if self.amount_rap is not None:
+                raise ValueError("amount_rap допустим только для rap_fixed")
+            if self.max_uses is not None:
+                raise ValueError("max_uses допустим только для rap_fixed")
+            if self.expires_at is not None:
+                raise ValueError("expires_at допустим только для rap_fixed")
+        else:  # rap_fixed
+            if self.percent is not None:
+                raise ValueError("percent допустим только для deposit_percent")
+            if self.amount_rap is None:
+                raise ValueError("Для RAP-промокода нужна сумма amount_rap")
+            if self.max_uses is None:
+                raise ValueError("Для RAP-промокода нужен конечный лимит max_uses")
+            # Decimal-strict validation (positivity, upper bound, max 2 decimals).
+            try:
+                promos.validate_rap_amount(self.amount_rap)
+            except ValueError as e:
+                raise ValueError(str(e))
+            try:
+                promos.validate_max_uses(self.max_uses)
+            except ValueError as e:
+                raise ValueError(str(e))
+        return self
 
 
 class XrocketInvoiceIn(InputModel):
@@ -510,6 +551,33 @@ def upgrade_rate_ok(session_id: str) -> bool:
         stale = [k for k, v in _upgrade_seen.items() if not v or now - v[0] > 3600]
         for k in stale:
             _upgrade_seen.pop(k, None)
+    return True
+
+
+# Promo apply rate limit: 30 requests per 60s per Discord-account (or session).
+# Burst-friendly (12 parallel percent activations in tests must pass), but stops
+# brute-force code enumeration. In-memory per worker + account-keyed; concurrent
+# correctness itself relies on atomic DB updates, not on this limiter.
+_promo_seen: dict = {}
+PROMO_RATE_LIMIT = 30
+PROMO_RATE_WINDOW = 60.0
+
+
+def promo_rate_ok(key: str) -> bool:
+    now = time.monotonic()
+    q = _promo_seen.get(key)
+    if q is None:
+        q = deque(maxlen=PROMO_RATE_LIMIT)
+        _promo_seen[key] = q
+    while q and now - q[0] > PROMO_RATE_WINDOW:
+        q.popleft()
+    if len(q) >= PROMO_RATE_LIMIT:
+        return False
+    q.append(now)
+    if len(_promo_seen) > 10000:
+        stale = [k for k, v in _promo_seen.items() if not v or now - v[-1] > 3600]
+        for k in stale:
+            _promo_seen.pop(k, None)
     return True
 
 
@@ -976,17 +1044,50 @@ async def deposit_info():
 @api_router.post("/promo/apply", response_model=UserOut)
 async def promo_apply(payload: PromoIn, request: Request):
     user = await require_user(request)
+    rate_key = promos.account_key(user) or user.get("session_id") or client_ip(request)
+    if not promo_rate_ok(rate_key):
+        raise HTTPException(status_code=429, detail="Слишком много попыток. Подождите минуту")
     code = payload.code.strip().upper()
     promo = await db.promo_codes.find_one({"code": code, "deleted": False}, {"_id": 0})
     if promo is None:
         raise HTTPException(status_code=400, detail="Промокод не найден")
+    if promos.promo_type(promo) == promos.PROMO_TYPE_RAP:
+        # Instant RAP gift: recipient ONLY from server auth, one issuance per
+        # (promo_id, Discord-account) regardless of session. Amount from DB.
+        # Active percent bonus is left untouched. No deposit/bank/referral writes.
+        try:
+            gift = await promos.apply_rap_gift(db, promo, user)
+        except promos.GiftLimitExhausted as e:
+            raise HTTPException(status_code=409, detail=str(e) or "Лимит использований исчерпан")
+        except promos.GiftNotAvailable as e:
+            msg = str(e) or "Промокод недоступен"
+            # Disabled/expired/deleted/gone -> 400 except exhausted (409 above).
+            # Missing recipient is also a client error, not auth (user IS authed).
+            raise HTTPException(status_code=400, detail=msg)
+        fresh = await db.users.find_one({"session_id": user["session_id"]}, {"_id": 0})
+        if not fresh:
+            raise HTTPException(status_code=409, detail="Аккаунт получателя не найден")
+        fresh = await refresh_user_promo(db, fresh)
+        out = to_user_out(fresh)
+        out.gift_type = "rap_fixed"
+        out.gift_amount = gift["amount"]
+        out.gift_already_received = bool(gift["already"])
+        return out
+    # Legacy percent path — unchanged semantics (gold nick sticky, frozen deposit terms).
+    already = await db.promo_activations.find_one(
+        {"promo_id": promo["id"], "account_key": promos.account_key(user)}, {"_id": 1}
+    )
     changes = promo_fields(promo)
     if promo.get("gold_nick"):
         changes["gold_nick"] = True
     await db.users.update_one({"session_id": user["session_id"]}, {"$set": changes})
     await record_activation(db, promo["id"], user)
     user.update(changes)
-    return to_user_out(user)
+    out = to_user_out(user)
+    out.gift_type = "deposit_percent"
+    out.gift_amount = None
+    out.gift_already_received = bool(already)
+    return out
 
 
 @api_router.post("/profile/roblox", response_model=UserOut)
@@ -1245,57 +1346,199 @@ async def xrocket_webhook(request: Request):
 
 
 # ---------- Admin ----------
+def _promo_public(row: dict, unique_users: int) -> dict:
+    out = {**row, "unique_users": unique_users}
+    kind = promos.promo_type(row)
+    out["type"] = kind
+    # Never expose the booking key list (size + privacy); counts are enough.
+    out.pop("reserved_keys", None)
+    if kind == promos.PROMO_TYPE_RAP:
+        out.pop("percent", None)
+        out["amount_rap"] = float(row.get("amount_rap") or 0)
+        out["max_uses"] = row.get("max_uses")
+        out["reserved_count"] = int(row.get("reserved_count") or 0)
+        out["used_count"] = unique_users
+    else:
+        out.pop("amount_rap", None)
+        out.pop("max_uses", None)
+        out.pop("expires_at", None)
+        out.pop("reserved_count", None)
+    return out
+
+
+async def _rap_usage_counts(promo_ids):
+    if not promo_ids:
+        return {}
+    counts = {}
+    try:
+        async for row in db.promo_gift_ops.aggregate([
+            {"$match": {"promo_id": {"$in": promo_ids}, "status": {"$in": ["reserved", "redeemed"]}}},
+            {"$group": {"_id": "$promo_id", "count": {"$sum": 1}}},
+        ]):
+            counts[row["_id"]] = row["count"]
+    except Exception:
+        # mongomock fallback: count per promo.
+        for pid in promo_ids:
+            counts[pid] = await db.promo_gift_ops.count_documents(
+                {"promo_id": pid, "status": {"$in": ["reserved", "redeemed"]}})
+    return counts
+
+
 @api_router.get("/admin/promos")
 async def admin_promos(request: Request):
     await require_admin(request)
-    promos = await db.promo_codes.find({"deleted": False}, {"_id": 0}).sort("created_at", -1).to_list(None)
+    rows = await db.promo_codes.find({"deleted": False}, {"_id": 0}).sort("created_at", -1).to_list(None)
+    ids = [p["id"] for p in rows]
     counts = {row["_id"]: row["count"] async for row in db.promo_activations.aggregate([
-        {"$match": {"promo_id": {"$in": [p["id"] for p in promos]}}},
+        {"$match": {"promo_id": {"$in": ids}}},
         {"$group": {"_id": "$promo_id", "count": {"$sum": 1}}},
-    ])}
-    return [{**p, "unique_users": counts.get(p["id"], 0)} for p in promos]
+    ])} if ids else {}
+    rap_counts = await _rap_usage_counts(
+        [p["id"] for p in rows if promos.promo_type(p) == promos.PROMO_TYPE_RAP])
+    out = []
+    for p in rows:
+        if promos.promo_type(p) == promos.PROMO_TYPE_RAP:
+            out.append(_promo_public(p, rap_counts.get(p["id"], 0)))
+        else:
+            out.append(_promo_public(p, counts.get(p["id"], 0)))
+    return out
+
+
+@api_router.get("/admin/promo-gifts")
+async def admin_promo_gifts(request: Request, promo_id: Optional[str] = None, limit: int = 100):
+    """Separate gift journal (audit only): who received how much and when.
+
+    Never a deposit, never bank/pool, never a deposit referral reward.
+    """
+    await require_admin(request)
+    limit = max(1, min(limit or 100, 500))
+    query = {"promo_id": promo_id} if promo_id else {}
+    try:
+        docs = await db.promo_gifts.find(query, {"_id": 0}).sort("redeemed_at", -1).to_list(limit)
+    except Exception:
+        docs = await db.promo_gift_ops.find(
+            {**query, "status": "redeemed"}, {"_id": 0}).sort("redeemed_at", -1).to_list(limit)
+    return docs
 
 
 @api_router.post("/admin/promos", status_code=201)
 async def admin_create_promo(payload: AdminPromoIn, request: Request):
     admin = await require_admin(request)
-    promo = {
-        "id": str(uuid.uuid4()), "code": payload.code.upper(), "percent": float(payload.percent),
-        "gold_nick": False, "deleted": False, "created_at": now_utc(),
-    }
+    code = payload.code.strip().upper()
+    kind = payload.type or promos.PROMO_TYPE_DEPOSIT
+    if kind == promos.PROMO_TYPE_RAP and not promos.rap_fixed_enabled():
+        raise HTTPException(status_code=400, detail=promos.RAP_DISABLED_MESSAGE)
+    if kind == promos.PROMO_TYPE_DEPOSIT:
+        promo = {
+            "id": str(uuid.uuid4()), "code": code, "type": promos.PROMO_TYPE_DEPOSIT,
+            "percent": float(payload.percent),
+            "gold_nick": False, "deleted": False, "created_at": now_utc(),
+        }
+    else:
+        amount = promos.validate_rap_amount(payload.amount_rap)
+        max_uses = promos.validate_max_uses(payload.max_uses)
+        promo = {
+            "id": str(uuid.uuid4()), "code": code, "type": promos.PROMO_TYPE_RAP,
+            "amount_rap": amount, "max_uses": max_uses,
+            "expires_at": as_utc(payload.expires_at) if payload.expires_at else None,
+            "reserved_count": 0, "reserved_keys": [],
+            "gold_nick": False, "deleted": False, "created_at": now_utc(),
+        }
     try:
         await db.promo_codes.insert_one(dict(promo))
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Промокод с таким названием уже существует")
     await db.admin_audit.insert_one({"action": "promo_create", "jti": admin["jti"], "promo": promo, "created_at": now_utc()})
-    return {**promo, "unique_users": 0}
+    # Recreation of a deleted code is a NEW promo (new id, zero stats) — warn explicitly.
+    warning = None
+    try:
+        prev = await db.promo_codes.find_one(
+            {"code": code, "id": {"$ne": promo["id"]}}, {"_id": 0, "id": 1, "deleted": 1})
+        if prev is not None:
+            warning = ("Код ранее использовался: это новая акция с чистым счётчиком. "
+                       "Старые выдачи сохранены за прежней акцией и не переносятся.")
+    except Exception:
+        pass
+    body = _promo_public(promo, 0)
+    if warning:
+        body["warning"] = warning
+    return body
 
 
 @api_router.put("/admin/promos/{promo_id}")
 async def admin_update_promo(promo_id: str, payload: AdminPromoIn, request: Request):
     admin = await require_admin(request)
+    existing = await db.promo_codes.find_one({"id": promo_id}, {"_id": 0})
+    if existing is None or existing.get("deleted"):
+        raise HTTPException(status_code=404, detail="Промокод не найден")
+    old_kind = promos.promo_type(existing)
+    new_kind = payload.type or promos.PROMO_TYPE_DEPOSIT
+    if new_kind != old_kind:
+        raise HTTPException(status_code=400, detail="Смена типа промокода запрещена: создайте новый код")
+    code = payload.code.strip().upper()
+    if old_kind == promos.PROMO_TYPE_DEPOSIT:
+        try:
+            promo = await db.promo_codes.find_one_and_update(
+                {"id": promo_id, "deleted": False},
+                {"$set": {"code": code, "percent": float(payload.percent), "updated_at": now_utc()}},
+                projection={"_id": 0}, return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            raise HTTPException(status_code=409, detail="Промокод с таким названием уже существует")
+        if promo is None:
+            raise HTTPException(status_code=404, detail="Промокод не найден")
+        await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(promo)})
+        await db.admin_audit.insert_one({"action": "promo_update", "jti": admin["jti"], "promo": promo, "created_at": now_utc()})
+        return _promo_public(
+            promo, await db.promo_activations.count_documents({"promo_id": promo_id}))
+    # rap_fixed edit: amount is frozen after the first booking; max_uses may only grow
+    # above the already-booked count; rename keeps stats; code clash -> 409.
+    if not promos.rap_fixed_enabled():
+        # Edits of existing gift promos stay allowed (e.g. to fix expiry) while the
+        # whole rap_fixed feature is disabled; creation/activation remain blocked.
+        pass
+    used = await db.promo_gift_ops.count_documents(
+        {"promo_id": promo_id, "status": {"$in": ["pending", "reserved", "redeemed"]}})
+    new_amount = promos.validate_rap_amount(payload.amount_rap)
+    new_max = promos.validate_max_uses(payload.max_uses)
+    old_amount = round(float(existing.get("amount_rap") or 0), 2)
+    if used > 0 and abs(new_amount - old_amount) > 1e-9:
+        raise HTTPException(status_code=400, detail="Сумма RAP заморожена после первой брони и не может меняться")
+    if new_max < used:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Лимит нельзя опускать ниже уже выданных ({used})")
+    new_expires = as_utc(payload.expires_at) if payload.expires_at else None
     try:
         promo = await db.promo_codes.find_one_and_update(
-            {"id": promo_id, "deleted": False},
-            {"$set": {"code": payload.code.upper(), "percent": float(payload.percent), "updated_at": now_utc()}},
+            {"id": promo_id, "deleted": False, "type": promos.PROMO_TYPE_RAP},
+            {"$set": {"code": code, "amount_rap": new_amount, "max_uses": new_max,
+                      "expires_at": new_expires, "updated_at": now_utc()}},
             projection={"_id": 0}, return_document=ReturnDocument.AFTER,
         )
     except DuplicateKeyError:
         raise HTTPException(status_code=409, detail="Промокод с таким названием уже существует")
     if promo is None:
         raise HTTPException(status_code=404, detail="Промокод не найден")
-    await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(promo)})
+    # RAP gifts never own the active percent bonus — no users update here.
     await db.admin_audit.insert_one({"action": "promo_update", "jti": admin["jti"], "promo": promo, "created_at": now_utc()})
-    return {**promo, "unique_users": await db.promo_activations.count_documents({"promo_id": promo_id})}
+    rap_counts = await _rap_usage_counts([promo_id])
+    return _promo_public(promo, rap_counts.get(promo_id, 0))
 
 
 @api_router.delete("/admin/promos/{promo_id}")
 async def admin_delete_promo(promo_id: str, request: Request):
     admin = await require_admin(request)
+    existing = await db.promo_codes.find_one({"id": promo_id}, {"_id": 0})
+    if existing is None or existing.get("deleted"):
+        raise HTTPException(status_code=404, detail="Промокод не найден")
     result = await db.promo_codes.update_one({"id": promo_id, "deleted": False}, {"$set": {"deleted": True, "updated_at": now_utc()}})
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Промокод не найден")
-    await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(None)})
+    if promos.promo_type(existing) == promos.PROMO_TYPE_DEPOSIT:
+        await db.users.update_many({"promo_id": promo_id}, {"$set": promo_fields(None)})
+    # rap_fixed: deletion revokes nothing already issued; new activations are blocked
+    # by the deleted flag; already-reserved ops still settle per saved conditions.
     await db.admin_audit.insert_one({"action": "promo_delete", "jti": admin["jti"], "promo_id": promo_id, "created_at": now_utc()})
     return {"ok": True}
 
@@ -1987,6 +2230,15 @@ async def ensure_indexes():
         await db.shop_items.update_one({"id": item["id"]}, {"$set": item}, upsert=True)
     # Убранные из каталога позиции исчезают из магазина (инвентари игроков и историю не трогаем).
     await db.shop_items.delete_many({"id": {"$nin": [item["id"] for item in SHOP_ITEMS]}})
+    # Crash recovery for instant RAP gifts: already-booked (reserved) ops settle per
+    # SAVED amount even if the promo was deleted/expired; pending (never booked)
+    # ops resume on the next user retry (atomic booking is idempotent).
+    try:
+        resumed = await promos.resume_incomplete_gifts(db)
+        if resumed:
+            logger.info("Resumed %s interrupted RAP gifts", resumed)
+    except Exception:
+        logger.exception("Could not resume interrupted RAP gifts")
     # Never delete user inventory or historical drops as a side effect of restarting.
     for dep in await db.deposits.find({"status": "processing", "settlement_version": 1}, {"_id": 0}).to_list(None):
         try:
