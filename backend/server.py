@@ -1493,10 +1493,6 @@ async def admin_update_promo(promo_id: str, payload: AdminPromoIn, request: Requ
             promo, await db.promo_activations.count_documents({"promo_id": promo_id}))
     # rap_fixed edit: amount is frozen after the first booking; max_uses may only grow
     # above the already-booked count; rename keeps stats; code clash -> 409.
-    if not promos.rap_fixed_enabled():
-        # Edits of existing gift promos stay allowed (e.g. to fix expiry) while the
-        # whole rap_fixed feature is disabled; creation/activation remain blocked.
-        pass
     used = await db.promo_gift_ops.count_documents(
         {"promo_id": promo_id, "status": {"$in": ["pending", "reserved", "redeemed"]}})
     new_amount = promos.validate_rap_amount(payload.amount_rap)

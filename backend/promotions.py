@@ -27,9 +27,9 @@ Safety (no Mongo transactions required, works on standalone):
 
 NOTE on budget: there is no separate bonus wallet — gifted RAP lands on the
 ordinary spendable balance and increases site liabilities (balances can buy /
-withdraw skins). Until the giveaway budget and RAP-spend rules are approved,
-keep rap_fixed DISABLED (RAP_FIXED_ENABLED=0, default). The flag gates creation
-and activation; the code paths remain fully implemented and tested.
+withdraw skins). Campaign cost is amount_rap * max_uses; it cuts net
+(bank - liabilities) and is visible in BankTab (gifts_total). Set
+RAP_FIXED_ENABLED=0 to block creation/activation while the budget is reviewed.
 """
 
 import os
@@ -56,12 +56,12 @@ MIN_RAP_GIFT = Decimal("0.01")
 MAX_RAP_GIFT = Decimal("100000")
 MAX_USES_LIMIT = 100000
 
-# Kill-switch: rap_fixed stays OFF until the giveaway budget and the rules for
-# spending/withdrawing gifted RAP are approved. No bonus wallet exists yet, so
-# gifted RAP would otherwise become ordinary spendable balance.
-# Enable explicitly with RAP_FIXED_ENABLED=1.
+# Kill-switch: set RAP_FIXED_ENABLED=0 to block creation/activation of rap_fixed
+# gifts (e.g. while the giveaway budget is under review). Default is ON so the
+# admin panel can create gift promos out of the box; gifts raise liabilities
+# and cut net (visible in BankTab) without touching bank/pool.
 def rap_fixed_enabled() -> bool:
-    return os.environ.get("RAP_FIXED_ENABLED", "0") == "1"
+    return os.environ.get("RAP_FIXED_ENABLED", "1") == "1"
 
 
 RAP_DISABLED_MESSAGE = (

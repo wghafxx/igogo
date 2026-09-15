@@ -279,9 +279,9 @@ def _balance(api, who="discord_1"):
     return asyncio.run(get())
 
 
-def test_rap_disabled_by_default_blocks_create_and_apply(promo_api, monkeypatch):
+def test_rap_disabled_flag_blocks_create_and_apply(promo_api, monkeypatch):
     api = promo_api
-    monkeypatch.delenv("RAP_FIXED_ENABLED", raising=False)
+    monkeypatch.setenv("RAP_FIXED_ENABLED", "0")
     created = api.request("POST", "/api/admin/promos", json={
         "code": "GIFTX", "type": "rap_fixed", "amount_rap": 10, "max_uses": 5})
     assert created.status_code == 400, created.text
@@ -289,7 +289,7 @@ def test_rap_disabled_by_default_blocks_create_and_apply(promo_api, monkeypatch)
     # Prepare a gift while enabled, then disable and try to apply.
     monkeypatch.setenv("RAP_FIXED_ENABLED", "1")
     assert _create_rap(api, "GIFTX", 10, 5).status_code == 201
-    monkeypatch.delenv("RAP_FIXED_ENABLED", raising=False)
+    monkeypatch.setenv("RAP_FIXED_ENABLED", "0")
     response = api.apply("giftx")
     assert response.status_code == 400, response.text
     assert "отключены" in response.json()["detail"]

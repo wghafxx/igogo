@@ -124,7 +124,7 @@ export default function PromosTab({ refreshKey = 0 }) {
             Каждый человек учитывается один раз для каждого промокода — по своему Discord-аккаунту. Повторные активации и пополнения не увеличивают счётчик.
           </p>
           <p className="text-[11px] text-[#7d8194] mt-1 max-w-[620px]">
-            RAP-подарки отключены до согласования бюджета раздачи и правил траты подаренного RAP: отдельного бонусного кошелька нет, начисленное станет обычным балансом.
+            RAP-подарок падает на обычный баланс и режет чистую позицию в Банке. Следи за бюджетом акции в карточке создания.
           </p>
         </div>
         <button onClick={() => { setFormError(""); setEditor(newEditor()); }} className="blox-btn-primary h-10 px-4 text-[12px]" data-testid="promo-add">+ Добавить промокод</button>
@@ -205,11 +205,11 @@ export default function PromosTab({ refreshKey = 0 }) {
                   data-testid="promo-type"
                 >
                   <option value="deposit_percent">Процент к депозиту</option>
-                  <option value="rap_fixed">Мгновенный RAP-подарок (отключён до согласования)</option>
+                  <option value="rap_fixed">Мгновенный RAP-подарок</option>
                 </select>
                 {editor.id
                   ? <span className="block mt-1 text-[11px] text-[#7d8194]">Тип менять нельзя — создайте новый код.</span>
-                  : <span className="block mt-1 text-[11px] text-[#7d8194]">RAP-подарки сейчас отключены на сервере до согласования бюджета.</span>}
+                  : <span className="block mt-1 text-[11px] text-[#7d8194]">Подарок: 1 человеку — 1 раз, бюджет виден ниже.</span>}
               </label>
               <label className="block text-[12px] text-[#b4b7c7]">
                 Название промокода
