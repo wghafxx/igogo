@@ -1,0 +1,28 @@
+{
+  "summary": "Verified new withdrawal→live-chat + top-up-via-chat flow. Backend: 5/5 pytest tests pass (deposit/info receiver='support', /api/chats support+deposit still work with deposit receiver_nick='Поддержка', /api/chats kind='withdrawal' returns 401 for guest and 201 for authed user with withdrawal_request user msg and 'Заявка на вывод принята' system msg, /api/skins/withdraw creates pending w/d). Frontend: profile withdraw button styled dark-gold, clicking inventory item→withdraw opens live chat with correct msg, no 'support-dialog'/ysrent1 anywhere, profile-withdrawal-instructions opens chat, top-up modal tab labelled 'Деньги' (RU), rub-method-sbp+rub-method-card tiles present, rub-quick-100+rub-pay-button creates chat msg 'Хочу пополнить баланс через СБП на 100 ₽ (≈ 200 RAP)' and closes modal, card-support-button creates 'Хочу пополнить баланс банковской картой (Visa / Mastercard)' msg and closes modal. Only quirk: switching lang via localStorage+reload did not swap tab label to 'Money' in one run (react state not reloaded via localStorage change alone); i18n dictionary has both 'Деньги' and 'Money' correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_withdrawal_chat_topup_flow.py",
+    "/app/test_reports/pytest/withdrawal_chat.xml",
+    "/app/test_reports/screenshots_iteration_5"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py chats_create: For kind='withdrawal', the auth check (`profile.registered`) is performed AFTER `chat.create_chat` runs. If a guest calls it, the chat is created first, then 401 raised, leaving an orphan open support chat in DB. Recommend moving the registration check above create_chat to prevent orphan chats. (Currently still returns 401 to the client so functionally OK, but pollutes chats collection.)",
+    "chats_create returns kind='support' in the chat record even when payload.kind was 'deposit' or 'withdrawal' — chat kind is fixed to 'support' inside create_chat. This is by design (single chat per user) but the API contract is a bit surprising. Consider documenting or storing latest 'action' on the chat."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_withdrawal_chat_topup_flow.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "JWT for discord_test_1 used from the review request; user re-seeded via /app/backend/tests/setup_test_user.py + roblox fields patched.",
+  "seed_data_creation": "Re-ran setup_test_user.py multiple times to give the test user 3 cheap skins for withdrawal; cleared prior chats/withdrawals/deposits before UI run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file /app/backend/tests/test_withdrawal_chat_topup_flow.py covers regression for these flows. If user runs out of skins re-run `python3 /app/backend/tests/setup_test_user.py` then patch roblox_nick/roblox_link. /api/chats/{id}/messages returns {chat, messages} object (not a bare list). Deposit info endpoint is /api/deposit/info (singular). skins/withdraw payload is {request_id, uids: [uid]}."
+}
