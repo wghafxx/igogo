@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only regression testing of the UpgradePanel/Gauge result-clearing fix. Ran the three requested BUG REGRESSION scenarios plus sanity checks against the live app with the supplied JWT. All three regressions PASS. No console errors observed. Wheel renders with orange glowing win zone.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Gauge label",
+       "issues": [
+         "Minor/cosmetic: the phrase state (and therefore data-phrase attribute + the `gauge-rare`/`font-black text-[#ffd44d]` yellow styling) is only reset at the *next* runSpin, not when result auto-clears or the user switches target/percent. Visually the label TEXT correctly reverts to the chance label ('low/average/high chance'), but if the last result was a rare phrase (win_rare/lose_rare), the yellow bold class remains applied to the chance label until the next spin. Recommend adding setPhrase(null) in the same code paths where result is cleared (clearResult in UpgradePanel and/or exposing a resetPhrase() from useUpgradeSpin). Non-blocking."
+       ]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iter6_gauge.jpeg", "/app/test_reports/iter6_final.jpeg"],
+  "action_items": [
+    "Optional cosmetic: reset `phrase` state when result is cleared (auto-clear at 4s and on target/bet/pct changes) so the gauge-rare yellow styling from a rare phrase doesn't linger on the subsequent chance label until the next spin."
+  ],
+  "critical_code_review_comments": [
+    "UpgradePanel.jsx clearResult() only clears result + lockedChance but not phrase. Gauge.jsx applies `rare` class based on phrase alone (independent of result). Recommend also resetting phrase (or making Gauge gate the rare class behind `result && phrase?.endsWith('_rare')`).",
+    "The gauge-label `data-phrase` attribute persists stale between spins, which can mislead automated tests. Consider clearing it alongside result clearing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% for the 3 regressions + sanity"},
+  "test_credentials": "Used provided JWT for discord_test_1 (balance ~999k RAP). No modification needed.",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "REG1: after result, wait 500ms then click a different shop-skin target — gauge-label reverts to chance label within ~1s (schedules clear at settleUntil-now = ~1s). REG2: after result, do nothing — clearTimer fires at 4s. REG3: pct button click during settle window immediately clears result via applyQuick() -> setLockedChance(null)+setResult(null); chance % updates to the new bet. Fast-spin toggle (data-testid=fast-icon) shortens wheel to ~2s. Shop skin cards use root data-testid equal to their id (e.g. shop-skin-awp-overdrive); the whole card is clickable via its child image `[data-testid=\"skin-card-image-<id>\"]`. Percent buttons available in default settings: pct-35, pct-55, pct-75 (task mentioned pct-25/pct-50 but the current settings don't expose those; tested with the available ones and the mechanism is identical). App displayed English labels even though bloxgrade_lang was set to 'ru' — likely the header language toggle overrides localStorage on login/re-render; not part of this task's scope.",
+  "rca of the issue": "Original bug (loss result phrase + old chance stuck for a long time) is fixed. Verified: (a) auto-clear timer via scheduleClear(4000) fires clearResult 4s after onResult; (b) targetKey effect re-schedules a clear at (settleUntil - now) when target/bet-skins change during the 1.5s settle window; (c) applyQuick / slider onValueChange proactively call setLockedChance(null) + setResult(null) so pct/multiplier/slider interactions unfreeze the chance display immediately. Only remaining minor smell: phrase state not reset in the same code paths, causing a subtle style residue if the previous phrase was rare."
+}

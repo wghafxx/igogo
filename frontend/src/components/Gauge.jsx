@@ -30,7 +30,7 @@ const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, resu
   const dash = halfDash(half);
 
   const ringClass = `gauge-ring ${fast ? "fast" : ""}`;
-  const rare = Boolean(phrase && phrase.endsWith("_rare"));
+  const rare = Boolean(result && phrase && phrase.endsWith("_rare"));
   const centerColor = result === "win" ? "#3ddc84" : result === "lose" ? "#ff5c5c" : "#ffffff";
   const chanceLabel = chance <= 0.15 ? t("gauge.low") : chance <= 0.5 ? t("gauge.mid") : t("gauge.high");
   const resultLabel = phrase ? t(phrase) : result === "win" ? t("gauge.win") : t("gauge.lose");
@@ -128,7 +128,7 @@ const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, resu
         >
           {(chance * 100).toFixed(2)}%
         </div>
-        <div className={`text-[12px] mt-1.5 text-center px-6 leading-tight transition-colors duration-300 ${rare ? "font-black text-[#ffd44d] gauge-rare" : result && !spinning ? "font-bold text-white/85" : "text-[#7d8194]"}`} data-testid="gauge-label" data-phrase={phrase || undefined}>
+        <div className={`text-[12px] mt-1.5 text-center px-6 leading-tight transition-colors duration-300 ${rare ? "font-black text-[#ffd44d] gauge-rare" : result && !spinning ? "font-bold text-white/85" : "text-[#7d8194]"}`} data-testid="gauge-label" data-phrase={result ? phrase || undefined : undefined}>
           {spinning ? t("gauge.spinning") : result ? resultLabel : chanceLabel}
         </div>
       </div>
