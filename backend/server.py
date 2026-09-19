@@ -328,6 +328,11 @@ class AdminRejectIn(InputModel):
 
 class BankSettingsIn(InputModel):
     rtp_target: Optional[float] = Field(default=None, ge=0.75, le=1.0)
+    pin: str = Field(min_length=1, max_length=32)
+
+
+class BankResetIn(InputModel):
+    pin: str = Field(min_length=1, max_length=32)
 
 
 class RainSettingsIn(InputModel):
@@ -342,11 +347,13 @@ class RainSettingsIn(InputModel):
 class BankAdjustIn(InputModel):
     amount: float = Field(ge=-1_000_000, le=1_000_000)
     note: str = Field(min_length=2, max_length=200)
+    pin: str = Field(min_length=1, max_length=32)
 
 
 class PoolTopUpIn(InputModel):
     amount: float = Field(ge=-1_000_000, le=1_000_000)
     note: str = Field(min_length=2, max_length=200)
+    pin: str = Field(min_length=1, max_length=32)
 
 
 class UidsIn(InputModel):
@@ -578,6 +585,19 @@ async def take_skins(user: dict, uids: List[str], credit: bool = False) -> List[
 # never exceeds rtp * total wagered (hard RTP ceiling) plus explicit admin top-ups. Second guard is solvency:
 # a prize the bank cannot cover becomes a silent forced loss (player sees a normal loss, no message).
 BANK_DEFAULTS = {"rtp_target": 0.85}
+ADMIN_BANK_PIN = os.environ.get("ADMIN_BANK_PIN") or "1001"
+
+
+def require_pin(pin: str) -> None:
+    if not hmac.compare_digest((pin or "").strip(), ADMIN_BANK_PIN):
+        raise HTTPException(status_code=403, detail="Неверный PIN-код")
+
+
+BANK_RESET_STATE = {
+    "bank": 0.0, "pool": 0.0, "commission_profit": 0.0,
+    "deposit_receipts": [], "withdrawal_receipts": [], "commission_deposits": [], "rain_returns": [],
+    "commission_backfill_version": 1,
+}
 _rng = secrets.SystemRandom()
 MAX_PROMO_BONUS = 0.5
 _upgrade_lock = asyncio.Lock()
@@ -2064,7 +2084,7 @@ async def admin_bank(request: Request):
     li = await liabilities()
     st = await rtp_stats()
     deposits_total = await _sum(db.bank_ledger, {"kind": "deposit"}, "$amount")
-    withdrawals_total = -await _sum(db.bank_ledger, {"kind": "withdrawal"}, "$amount")
+    withdrawals_total = -await _sum(db.bank_ledger, {"kind": "withdrawal"}, "$amount") + 0.0
     adjustments_total = await _sum(db.bank_ledger, {"kind": "adjust"}, "$amount")
     forced = await db.upgrades.count_documents({"forced_loss": True})
     forced_by = {d["_id"]: d["n"] for d in await db.upgrades.aggregate([{"$match": {"forced_loss": True}}, {"$group": {"_id": "$forced_reason", "n": {"$sum": 1}}}]).to_list(20)}
@@ -2113,7 +2133,8 @@ async def admin_bank(request: Request):
 @api_router.put("/admin/bank/settings")
 async def admin_bank_settings(payload: BankSettingsIn, request: Request):
     await require_admin(request)
-    changes = {k: v for k, v in payload.model_dump().items() if v is not None}
+    require_pin(payload.pin)
+    changes = {k: v for k, v in payload.model_dump(exclude={"pin"}).items() if v is not None}
     if not changes:
         raise HTTPException(status_code=400, detail="Нет изменений")
     await db.bank_settings.update_one({"id": "main"}, {"$set": {**changes, "updated_at": now_utc()}}, upsert=True)
@@ -2162,6 +2183,7 @@ async def admin_players(request: Request):
 @api_router.post("/admin/bank/adjust")
 async def admin_bank_adjust(payload: BankAdjustIn, request: Request):
     await require_admin(request)
+    require_pin(payload.pin)
     if abs(payload.amount) < 0.01:
         raise HTTPException(status_code=400, detail="Сумма должна быть не нулевой")
     amount = round(payload.amount, 2)
@@ -2182,6 +2204,7 @@ async def admin_bank_adjust(payload: BankAdjustIn, request: Request):
 @api_router.post("/admin/bank/pool")
 async def admin_bank_pool(payload: PoolTopUpIn, request: Request):
     await require_admin(request)
+    require_pin(payload.pin)
     amount = round(payload.amount, 2)
     if amount == 0:
         raise HTTPException(400, "Сумма должна быть не нулевой")
@@ -2198,6 +2221,25 @@ async def admin_bank_pool(payload: PoolTopUpIn, request: Request):
     pool_after = float(state["pool"])
     await db.bank_ledger.insert_one({"id": str(uuid.uuid4()), "kind": "pool", "amount": amount, "bank_after": await bank_balance(), "note": payload.note.strip(), "created_at": now_utc()})
     return {"ok": True, "pool": pool_after}
+
+
+@api_router.post("/admin/bank/reset")
+async def admin_bank_reset(payload: BankResetIn, request: Request):
+    """Factory reset of the bank: balance, pool, commission and ledger back to zero. Games/players untouched."""
+    await require_admin(request)
+    require_pin(payload.pin)
+    async with _upgrade_lock:
+        before = await db.bank_state.find_one({"id": "main"}, {"_id": 0}) or {}
+        await db.bank_state.replace_one({"id": "main"}, {"id": "main", **BANK_RESET_STATE, "reset_at": now_utc()}, upsert=True)
+        await db.bank_ledger.delete_many({})
+        await db.bank_ledger.insert_one({
+            "id": str(uuid.uuid4()), "kind": "reset", "amount": 0.0, "bank_after": 0.0,
+            "note": f"Полный сброс банка до заводских настроек (было: банк {float(before.get('bank') or 0):.2f}, пул {float(before.get('pool') or 0):.2f}, комиссия {float(before.get('commission_profit') or 0):.2f})",
+            "created_at": now_utc(),
+        })
+    await db.admin_audit.insert_one({"id": str(uuid.uuid4()), "event": "bank_reset", "ip": client_ip(request), "ua": ua_hash(request), "created_at": now_utc()})
+    state = await db.bank_state.find_one({"id": "main"}, {"_id": 0})
+    return {"ok": True, "bank": float(state["bank"]), "pool": float(state["pool"]), "commission_profit": float(state["commission_profit"])}
 
 
 BEST_DROP_WINDOW = timedelta(hours=24)

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RobuxIcon } from "../Logo";
 import { adminApi, formatMoney, parseServerDate } from "../../lib/api";
+import PinConfirmDialog from "./PinConfirmDialog";
 
 const fmtDate = (d) => parseServerDate(d).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const pct = (v) => `${(Number(v) * 100).toFixed(1)}%`;
@@ -12,6 +13,7 @@ const KIND = {
   adjust: ["Корректировка", "text-[#ffb000]"],
   settings: ["Настройка", "text-[#8e91a3]"],
   pool: ["Пул выдачи", "text-[#4b9dff]"],
+  reset: ["Сброс банка", "text-[#ff5c5c]"],
 };
 
 const Stat = ({ label, value, tone = "", testId, hint }) => (
@@ -26,22 +28,24 @@ const SETTINGS = [
   { key: "rtp_target", label: "RTP (доля возврата игрокам)", hint: "Показ игроку: шанс = ставка / цена. Реальная победа: ставка / цена × RTP. Защита банка может заменить выигрыш проигрышем при нехватке средств или блокировки.", min: 75, max: 100, fmt: (v) => `${v}% · комиссия ${100 - v}%`, to: (v) => v / 100, from: (v) => Math.round(v * 100) },
 ];
 
-const SettingRow = ({ s, value, onSaved }) => {
+const SettingRow = ({ s, value, onSaved, askPin }) => {
   const [v, setV] = useState(s.from(value));
-  const [busy, setBusy] = useState(false);
   useEffect(() => setV(s.from(value)), [value, s]);
-  const save = async () => {
-    setBusy(true);
-    try {
-      await adminApi.bankSettings({ [s.key]: s.to(v) });
-      toast.success(`${s.label}: ${s.fmt(v)}`);
-      onSaved();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Ошибка");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const save = () => askPin({
+    title: "Подтвердите смену RTP",
+    description: `Текущее значение: ${s.fmt(s.from(value))}.\nНовое значение: ${s.fmt(v)}.\n\nИзменение вступит в силу для всех следующих прокрутов. Введите PIN-код.`,
+    confirmLabel: "Изменить RTP",
+    onConfirm: async (pin) => {
+      try {
+        await adminApi.bankSettings({ [s.key]: s.to(v) }, pin);
+        toast.success(`${s.label}: ${s.fmt(v)}`);
+        onSaved();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Ошибка");
+        throw e;
+      }
+    },
+  });
   return (
     <div className="space-y-1.5" data-testid={`setting-${s.key}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -53,7 +57,7 @@ const SettingRow = ({ s, value, onSaved }) => {
       </div>
       <div className="flex items-center gap-2">
         <input type="range" min={s.min} max={s.max} step={1} value={v} onChange={(e) => setV(Number(e.target.value))} className="flex-1 accent-[#ffb000]" data-testid={`setting-${s.key}-slider`} />
-        <button onClick={save} disabled={busy || s.from(value) === v} className="blox-btn-primary h-8 px-3 text-[11px] disabled:opacity-40" data-testid={`setting-${s.key}-save`}>
+        <button onClick={save} disabled={s.from(value) === v} className="blox-btn-primary h-8 px-3 text-[11px] disabled:opacity-40" data-testid={`setting-${s.key}-save`}>
           Сохранить
         </button>
       </div>
@@ -61,84 +65,92 @@ const SettingRow = ({ s, value, onSaved }) => {
   );
 };
 
-const RtpControl = ({ settings, onSaved }) => (
+const RtpControl = ({ settings, onSaved, askPin }) => (
   <div className="blox-panel p-4 space-y-4" data-testid="bank-rtp-panel">
     <div className="text-[13px] font-bold">Настройки выдачи</div>
-    {SETTINGS.map((s) => <SettingRow key={s.key} s={s} value={settings[s.key]} onSaved={onSaved} />)}
+    {SETTINGS.map((s) => <SettingRow key={s.key} s={s} value={settings[s.key]} onSaved={onSaved} askPin={askPin} />)}
   </div>
 );
 
-const AdjustForm = ({ onDone }) => {
+const AdjustForm = ({ onDone, askPin }) => {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const submit = async (sign) => {
+  const submit = (sign) => {
     const v = Number(amount) * sign;
     if (!v || note.trim().length < 2) return;
-    setBusy(true);
-    try {
-      await adminApi.bankAdjust(v, note.trim());
-      toast.success(`Банк скорректирован на ${v > 0 ? "+" : ""}${formatMoney(v)}`);
-      setAmount("");
-      setNote("");
-      onDone();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Ошибка");
-    } finally {
-      setBusy(false);
-    }
+    askPin({
+      title: v > 0 ? "Добавить в банк" : "Списать из банка",
+      description: `Сумма: ${v > 0 ? "+" : ""}${formatMoney(v)} RAP.\nПричина: ${note.trim()}.\n\nВведите PIN-код для подтверждения.`,
+      confirmLabel: v > 0 ? "Добавить" : "Списать",
+      onConfirm: async (pin) => {
+        try {
+          await adminApi.bankAdjust(v, note.trim(), pin);
+          toast.success(`Банк скорректирован на ${v > 0 ? "+" : ""}${formatMoney(v)}`);
+          setAmount("");
+          setNote("");
+          onDone();
+        } catch (e) {
+          toast.error(e?.response?.data?.detail || "Ошибка");
+          throw e;
+        }
+      },
+    });
   };
   return (
     <div className="blox-panel p-4 space-y-2" data-testid="bank-adjust-panel">
       <div className="text-[13px] font-bold">Ручная корректировка банка</div>
-      <div className="text-[11px] text-[#8e91a3]">Только для исправлений: скин ушёл вне сайта, ошибка в сумме и т.п. Каждая правка пишется в журнал.</div>
+      <div className="text-[11px] text-[#8e91a3]">Только для исправлений: скин ушёл вне сайта, ошибка в сумме и т.п. Каждая правка пишется в журнал. Требуется PIN-код.</div>
       <div className="flex items-center gap-2 h-10 px-3 rounded-lg bg-[#0f1015]">
         <RobuxIcon size={13} />
         <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="Сумма RAP" className="flex-1 bg-transparent outline-none text-[13px] font-bold" data-testid="bank-adjust-amount" />
       </div>
       <input value={note} onChange={(e) => setNote(e.target.value.slice(0, 200))} placeholder="Причина (обязательно)" className="w-full h-9 px-3 rounded-lg bg-[#0f1015] outline-none text-[12px]" data-testid="bank-adjust-note" />
       <div className="flex gap-2">
-        <button onClick={() => submit(1)} disabled={busy || !Number(amount) || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#2ecc71] text-black font-bold text-[12px] disabled:opacity-40" data-testid="bank-adjust-plus">+ Добавить</button>
-        <button onClick={() => submit(-1)} disabled={busy || !Number(amount) || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#ff5c5c] text-white font-bold text-[12px] disabled:opacity-40" data-testid="bank-adjust-minus">− Списать</button>
+        <button onClick={() => submit(1)} disabled={!Number(amount) || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#2ecc71] text-black font-bold text-[12px] disabled:opacity-40" data-testid="bank-adjust-plus">+ Добавить</button>
+        <button onClick={() => submit(-1)} disabled={!Number(amount) || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#ff5c5c] text-white font-bold text-[12px] disabled:opacity-40" data-testid="bank-adjust-minus">− Списать</button>
       </div>
     </div>
   );
 };
 
-const PoolForm = ({ onDone, pool }) => {
+const PoolForm = ({ onDone, pool, askPin }) => {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const submit = async (sign) => {
+  const submit = (sign) => {
     const v = Number(amount);
     if (!v || v <= 0 || note.trim().length < 2) return;
-    setBusy(true);
-    try {
-      await adminApi.poolTopup(sign * v, note.trim());
-      toast.success(`Пул выдачи ${sign > 0 ? "пополнен" : "уменьшен"} на ${formatMoney(v)}`);
-      setAmount("");
-      setNote("");
-      onDone();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Ошибка");
-    } finally {
-      setBusy(false);
-    }
+    askPin({
+      title: sign > 0 ? "Пополнить пул выдачи" : "Уменьшить пул выдачи",
+      description: `Сумма: ${sign > 0 ? "+" : "−"}${formatMoney(v)} RAP.\nПричина: ${note.trim()}.\n\nВведите PIN-код для подтверждения.`,
+      confirmLabel: sign > 0 ? "Пополнить" : "Уменьшить",
+      onConfirm: async (pin) => {
+        try {
+          await adminApi.poolTopup(sign * v, note.trim(), pin);
+          toast.success(`Пул выдачи ${sign > 0 ? "пополнен" : "уменьшен"} на ${formatMoney(v)}`);
+          setAmount("");
+          setNote("");
+          onDone();
+        } catch (e) {
+          toast.error(e?.response?.data?.detail || "Ошибка");
+          throw e;
+        }
+      },
+    });
   };
   return (
     <div className="blox-panel p-4 space-y-2" data-testid="bank-pool-topup">
       <div className="text-[13px] font-bold">Изменить пул выдачи</div>
-      <div className="text-[11px] text-[#8e91a3]">Можно добавить или убрать бюджет на выигрыши. Для уменьшения доступно {formatMoney(pool)} RAP свободного пула. Резерв активной «Удачи» возвращается кнопкой её закрытия.</div>
+      <div className="text-[11px] text-[#8e91a3]">Можно добавить или убрать бюджет на выигрыши. Для уменьшения доступно {formatMoney(pool)} RAP свободного пула. Резерв активной «Удачи» возвращается кнопкой её закрытия. Требуется PIN-код.</div>
       <div className="flex items-center gap-2 h-10 px-3 rounded-lg bg-[#0f1015]">
         <RobuxIcon size={13} />
         <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="Сумма RAP" className="flex-1 bg-transparent outline-none text-[13px] font-bold" data-testid="bank-pool-amount" />
       </div>
       <input value={note} onChange={(e) => setNote(e.target.value.slice(0, 200))} placeholder="Причина (обязательно)" className="w-full h-9 px-3 rounded-lg bg-[#0f1015] outline-none text-[12px]" data-testid="bank-pool-note" />
       <div className="flex gap-2">
-        <button onClick={() => submit(1)} disabled={busy || !Number(amount) || Number(amount) <= 0 || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#4b9dff] text-black font-bold text-[12px] disabled:opacity-40" data-testid="bank-pool-submit">
+        <button onClick={() => submit(1)} disabled={!Number(amount) || Number(amount) <= 0 || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#4b9dff] text-black font-bold text-[12px] disabled:opacity-40" data-testid="bank-pool-submit">
           + Пополнить
         </button>
-        <button onClick={() => submit(-1)} disabled={busy || !Number(amount) || Number(amount) <= 0 || Number(amount) > pool || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#ff5c5c] text-white font-bold text-[12px] disabled:opacity-40" data-testid="bank-pool-decrease">
+        <button onClick={() => submit(-1)} disabled={!Number(amount) || Number(amount) <= 0 || Number(amount) > pool || note.trim().length < 2} className="flex-1 h-9 rounded-lg bg-[#ff5c5c] text-white font-bold text-[12px] disabled:opacity-40" data-testid="bank-pool-decrease">
           − Уменьшить
         </button>
       </div>
@@ -146,8 +158,37 @@ const PoolForm = ({ onDone, pool }) => {
   );
 };
 
+const ResetPanel = ({ data, onDone, askPin }) => {
+  const reset = () => askPin({
+    danger: true,
+    title: "Сбросить ВЕСЬ банк до заводских настроек?",
+    description: `Будет обнулено: банк ${formatMoney(data.bank)} → 0, пул выдачи ${formatMoney(data.pool ?? 0)} → 0, комиссия ${formatMoney(data.commission_profit ?? 0)} → 0, журнал операций и итоги «всего задепозитили / выведено» → 0.\n\nНЕ затрагивается: игры и «всего апгрейдов», игроки, их балансы и инвентари, заявки.\n\nДействие необратимо. Введите PIN-код.`,
+    confirmLabel: "Сбросить банк",
+    onConfirm: async (pin) => {
+      try {
+        const r = await adminApi.bankReset(pin);
+        toast.success(`Банк сброшен: банк ${formatMoney(r.bank)}, пул ${formatMoney(r.pool)}, комиссия ${formatMoney(r.commission_profit)}`);
+        onDone();
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Ошибка");
+        throw e;
+      }
+    },
+  });
+  return (
+    <div className="blox-panel p-4 space-y-2 border border-[#ff5c5c]/40" data-testid="bank-reset-panel">
+      <div className="text-[13px] font-bold text-[#ff8a8a]">Полный сброс банка</div>
+      <div className="text-[11px] text-[#8e91a3]">Обнуляет банк, пул выдачи, комиссию и журнал — банк стартует с нуля. Счётчик игр/апгрейдов и данные игроков остаются. Требуется PIN-код.</div>
+      <button onClick={reset} className="w-full h-9 rounded-lg bg-[#ff5c5c] hover:bg-[#ff7676] text-white font-bold text-[12px] transition-colors" data-testid="bank-reset-button">
+        Сбросить весь банк до 0
+      </button>
+    </div>
+  );
+};
+
 export default function BankTab({ refreshKey = 0 }) {
   const [data, setData] = useState(null);
+  const [pinRequest, setPinRequest] = useState(null);
   const load = useCallback(() => adminApi.bank().then(setData).catch(() => toast.error("Не удалось загрузить банк")), []);
   useEffect(() => {
     load();
@@ -210,13 +251,15 @@ export default function BankTab({ refreshKey = 0 }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <RtpControl settings={settings} onSaved={load} />
-        <PoolForm onDone={load} pool={Number(pool ?? 0)} />
+        <RtpControl settings={settings} onSaved={load} askPin={setPinRequest} />
+        <PoolForm onDone={load} pool={Number(pool ?? 0)} askPin={setPinRequest} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <AdjustForm onDone={load} />
+        <AdjustForm onDone={load} askPin={setPinRequest} />
+        <ResetPanel data={data} onDone={load} askPin={setPinRequest} />
       </div>
+      <PinConfirmDialog request={pinRequest} onClose={() => setPinRequest(null)} />
 
       <div className="blox-panel p-4" data-testid="bank-ledger">
         <div className="text-[13px] font-bold mb-3">Журнал операций банка</div>
