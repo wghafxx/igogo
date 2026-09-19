@@ -2228,7 +2228,9 @@ async def admin_bank_reset(payload: BankResetIn, request: Request):
     """Factory reset of the bank: balance, pool, commission and ledger back to zero. Games/players untouched."""
     await require_admin(request)
     require_pin(payload.pin)
-    async with _upgrade_lock:
+    async with bank_lock() as lock:
+        if not lock.leased:
+            raise HTTPException(status_code=409, detail="Банк занят выплатой — повторите через несколько секунд")
         before = await db.bank_state.find_one({"id": "main"}, {"_id": 0}) or {}
         await db.bank_state.replace_one({"id": "main"}, {"id": "main", **BANK_RESET_STATE, "reset_at": now_utc()}, upsert=True)
         await db.bank_ledger.delete_many({})

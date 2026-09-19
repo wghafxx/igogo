@@ -1,5 +1,11 @@
 # BLOXGRADE — PRD / состояние
 
+## Сессия 3 (2026-06): админ-банк — PIN и полный сброс
+- PIN-код 1001 (ADMIN_BANK_PIN в env, по умолчанию 1001; проверка server-side hmac) обязателен для: смены RTP (диалог подтверждения «было → стало»), корректировки банка ±, изменения пула ±, полного сброса.
+- POST /api/admin/bank/reset {pin}: под bank_lock() (Mongo-lease) bank_state → {bank 0, pool 0, commission_profit 0, receipts [], rain_returns [], commission_backfill_version 1}, bank_ledger очищается + 1 строка kind "reset"; admin_audit event bank_reset. Не трогает upgrades/users/deposits/withdrawals. pool=0.0 выставлен явно, чтобы ensure_pool не восстанавливал его из истории.
+- Frontend: components/admin/PinConfirmDialog.jsx, BankTab.jsx (ResetPanel, askPin). Тесты: BankTab.test.jsx 7/7; testing agent iteration_7 — backend 13/13, frontend 100%.
+
+
 ## Сессия 2 (2026-06): колесо, фразы, звуки, баг сброса результата
 - Зона колеса — оранжевый градиент (#be4a1d→#e8862f→#ffbf48→#ffe6a3) + размытое SVG-свечение (feGaussianBlur, мягкая пульсация). Пользователь явно выбрал ОРАНЖЕВЫЙ вариант — не менять на золотой.
 - Вместо надписи «кешбэк +N» (кешбэк всё равно начисляется) — фразы: проигрыш «Скоро повезет !»/«Почти докрутило !»/«Еще чуть чуть..», победа «Поздравляем !»/«Удачный прокрут !». 1% редкие: «Ёбаный рот этого казино...» + тихий /sounds/casino.mp3 (vol .12); «Меллстройность подкрутил...» + /sounds/mellstroy.mp3 (vol .3). Логика в hooks/useUpgradeSpin.js (pickPhrase), lib/sound.js (playRareSound).

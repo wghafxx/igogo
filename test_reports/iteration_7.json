@@ -1,0 +1,22 @@
+{
+  "summary": "Tested BloxGrade admin bank PIN-protected operations (RTP settings, pool +/-, bank adjust +/-, and new full bank reset). Backend: 13/13 pytest passed including PIN validation matrix (missing→422, wrong→403 'Неверный PIN-код', correct→200), factory reset semantics (bank/pool/commission/deposits_total/withdrawals_total/adjustments_total all == 0, not -0), ledger fully wiped with exactly one 'reset' row, Mongo bank_state has cleared receipt arrays and commission_backfill_version=1, games.total and rtp.wagered unchanged, and pool topup after reset is NOT back-filled from historical upgrades. Frontend: full happy-path + negative flow through UI works — pin dialog appears with 90% in description, wrong PIN keeps dialog open + shows error toast, correct PIN closes dialog and applies change; pool/adjust with PIN update stats; reset dialog shows red 'ВЕСЬ банк' title, cancel is a no-op, confirm zeroes all stats while games counter stays.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_bank_pin_reset.py",
+    "/app/test_reports/pytest/bank_pin_reset.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Task spec references seed input testids admin-seed-word-0..9 but the actual UI uses admin-seed-word-1..10 (see AdminPage.jsx L88 uses `i+1`). Test spec should be updated OR the component switched to 0-indexed, otherwise external test harnesses following the spec will fail.",
+    "server.py file is 2729 lines — exceeds 700 LOC guideline; consider splitting admin/bank routes into a router module.",
+    "admin_bank_reset drops db.bank_ledger.delete_many({}) inside only the in-process asyncio lock (_upgrade_lock) — no Mongo lease. Concurrent workers/replicas could interleave a spin ledger write between delete_many and the reset row insert. Consider using the same bank_lock() context used elsewhere."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin seed: 'alpha bravo charlie delta echo foxtrot golf hotel india juliet'; PIN: 1001",
+  "seed_data_creation": "None. Reset test intentionally wipes bank_state/bank_ledger — this is the tested feature.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All PIN flows and factory reset verified. UA-bound admin session (same User-Agent required per Authorization: Bearer token). Note that seed word testids are 1-indexed in UI (admin-seed-word-1..10)."
+}
