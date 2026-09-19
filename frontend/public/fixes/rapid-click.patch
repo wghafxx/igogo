@@ -1,0 +1,663 @@
+diff --git a/frontend/src/App.js b/frontend/src/App.js
+index f26668c..efbc947 100644
+--- a/frontend/src/App.js
++++ b/frontend/src/App.js
+@@ -1,4 +1,4 @@
+-import React, { Suspense, lazy, useEffect, useState } from "react";
++import React, { Suspense, lazy, useCallback, useEffect, useState } from "react";
+ import "./App.css";
+ import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation, useParams } from "react-router-dom";
+ import { Link } from "./lib/router";
+@@ -107,7 +107,7 @@ const Home = () => {
+   }, [sessionId, pauseUserRefresh]);
+   useEffect(() => { setTarget(null); setBetSkins([]); setSpinning(false); }, [sessionId]);
+   useEffect(() => { refreshUser(); }, [refreshUser]);
+-  const toggleBetSkin = (sk) => setBetSkins((prev) => (prev[0]?.uid === sk.uid ? [] : [sk]));
++  const toggleBetSkin = useCallback((sk) => setBetSkins((prev) => (prev[0]?.uid === sk.uid ? [] : [sk])), []);
+ 
+   const updateSettings = (s) => {
+     setSettings(normalizeSettings(s));
+diff --git a/frontend/src/App.css b/frontend/src/App.css
+index 83eaf9d..4ec40b8 100644
+--- a/frontend/src/App.css
++++ b/frontend/src/App.css
+@@ -336,6 +336,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #00a2ff; outline-offs
+ @media (max-width: 639px) {
+   .target-remove { top: 8px; right: 8px; width: 24px; height: 24px; }
+   .slot-item-img { padding: 4px 12%; }
++  .reel-side { width: 20%; }
++  .reel-side-left { left: 0; }
++  .reel-side-right { right: 0; }
+ }
+ 
+ @keyframes chat-panel-in { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+diff --git a/frontend/src/components/PointerEventsGuard.jsx b/frontend/src/components/PointerEventsGuard.jsx
+index b142199..7a03383 100644
+--- a/frontend/src/components/PointerEventsGuard.jsx
++++ b/frontend/src/components/PointerEventsGuard.jsx
+@@ -1,24 +1,38 @@
+ import { useEffect } from "react";
+ 
+-const OPEN_LAYERS = '[role="dialog"][data-state="open"], [role="menu"][data-state="open"], [data-radix-popper-content-wrapper]';
++const OPEN_LAYERS = ['dialog', 'alertdialog', 'menu', 'listbox']
++  .map((role) => `[role="${role}"][data-state="open"]`).join(', ');
+ 
+ // Radix locks body pointer-events while a modal layer is open; if a layer unmounts mid-transition the lock can
+ // get stuck and the whole page stops reacting to clicks. Clear it whenever no layer is actually open.
+ export default function PointerEventsGuard() {
+   useEffect(() => {
+-    let timer = 0;
++    let timer = null;
+     const check = () => {
++      timer = null;
++      if (document.body.style.pointerEvents !== "none") return;
++      // A popper wrapper can belong to a tooltip or a closed menu. Only an
++      // actually open dismissable layer owns the lock (including Radix Select).
++      if (!document.querySelector(OPEN_LAYERS)) document.body.style.pointerEvents = "";
++    };
++    const schedule = () => {
++      // Throttle, not debounce: ongoing animation must never postpone recovery.
++      if (timer === null && document.body.style.pointerEvents === "none") {
++        timer = window.setTimeout(check, 350);
++      }
++    };
++    const bodyObserver = new MutationObserver(schedule);
++    bodyObserver.observe(document.body, { attributes: true, attributeFilter: ["style"] });
++    const layerObserver = new MutationObserver(schedule);
++    layerObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-state"] });
++    const interval = window.setInterval(schedule, 2000);
++    schedule();
++    return () => {
++      bodyObserver.disconnect();
++      layerObserver.disconnect();
+       window.clearTimeout(timer);
+-      timer = window.setTimeout(() => {
+-        if (document.body.style.pointerEvents === "none" && !document.querySelector(OPEN_LAYERS)) {
+-          document.body.style.pointerEvents = "";
+-        }
+-      }, 350);
++      window.clearInterval(interval);
+     };
+-    const observer = new MutationObserver(check);
+-    observer.observe(document.body, { attributes: true, attributeFilter: ["style"], childList: true, subtree: true });
+-    const interval = window.setInterval(check, 2000);
+-    return () => { observer.disconnect(); window.clearTimeout(timer); window.clearInterval(interval); };
+   }, []);
+   return null;
+ }
+diff --git a/frontend/src/components/Header.jsx b/frontend/src/components/Header.jsx
+index 79f6d47..2dae805 100644
+--- a/frontend/src/components/Header.jsx
++++ b/frontend/src/components/Header.jsx
+@@ -39,7 +39,7 @@ const StatBlock = ({ label, value, icon, mobile = false }) => (
+ );
+ 
+ const ProfileMenu = ({ t, authUser, onLogout }) => (
+-  <DropdownMenu>
++  <DropdownMenu modal={false}>
+     <DropdownMenuTrigger asChild>
+       <button className="blox-chip h-10 sm:h-11 pl-1 pr-3 flex items-center gap-2 text-white font-bold text-sm sm:text-[15px]" data-testid="profile-button">
+         <img src={authUser.avatar} alt={authUser.nickname} className="w-8 h-8 sm:w-9 sm:h-9 rounded-md object-cover" data-testid="profile-avatar" />
+@@ -139,7 +139,7 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
+ 
+         {authUser ? (
+           <>
+-            <DropdownMenu>
++            <DropdownMenu modal={false}>
+               <DropdownMenuTrigger asChild>
+                 <button className="blox-chip h-10 sm:h-11 px-2.5 sm:px-4 flex items-center gap-1.5 sm:gap-2 text-white font-bold text-sm sm:text-[15px] max-w-[140px] sm:max-w-none" data-testid="balance-button">
+                   <RobuxIcon size={18} />
+@@ -153,7 +153,7 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
+                   <RobuxIcon size={18} /> {formatMoney(user.balance)}
+                 </div>
+                 <DropdownMenuSeparator className="bg-[#262833]" />
+-                <DropdownMenuItem onSelect={() => setTimeout(openTopUp, 0)} className="focus:bg-[#22242e] focus:text-white cursor-pointer">
++                <DropdownMenuItem onSelect={openTopUp} data-testid="balance-menu-topup" className="focus:bg-[#22242e] focus:text-white cursor-pointer">
+                   <WalletIcon size={14} className="mr-2" /> {t("header.topup")}
+                 </DropdownMenuItem>
+               </DropdownMenuContent>
+diff --git a/frontend/src/components/SkinsSection.jsx b/frontend/src/components/SkinsSection.jsx
+index 862c845..2020224 100644
+--- a/frontend/src/components/SkinsSection.jsx
++++ b/frontend/src/components/SkinsSection.jsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useState } from "react";
++import React, { useCallback, useEffect, useMemo, useState } from "react";
+ import { Boxes, Store } from "lucide-react";
+ import { RobuxIcon } from "./Logo";
+ import AnimButton from "./AnimButton";
+@@ -43,7 +43,7 @@ const MobileTabs = ({ t, value, onChange }) => (
+   </div>
+ );
+ 
+-const GuestInventory = ({ t, onLogin }) => (
++const GuestInventory = React.memo(({ t, onLogin }) => (
+   <div className="relative p-2 pt-0" data-testid="guest-inventory">
+     <div className="text-center pt-6 pb-4">
+       <div className="font-bold text-[18px]" data-testid="guest-title">
+@@ -54,9 +54,9 @@ const GuestInventory = ({ t, onLogin }) => (
+     </div>
+     <SkinShowcase size="md" className="mt-2" />
+   </div>
+-);
++));
+ 
+-const UserInventory = ({ t, skins, pageSize, onTopUp, selectedUids, onToggle, disabled }) => {
++const UserInventory = React.memo(({ t, skins, pageSize, onTopUp, selectedUids, onToggle, disabled }) => {
+   const [page, setPage] = useState(1);
+   const pages = Math.max(1, Math.ceil(skins.length / pageSize));
+   const currentPage = Math.min(page, pages);
+@@ -80,13 +80,13 @@ const UserInventory = ({ t, skins, pageSize, onTopUp, selectedUids, onToggle, di
+           </div>
+       )}>
+         {visibleSkins.map((s, i) => (
+-          <SkinCard key={s.uid || `${s.id || s.name}-${i}`} item={s} disabled={disabled} testId={`bet-card-${s.uid}`} selected={selectedUids.includes(s.uid)} onClick={() => onToggle(s)} />
++          <SkinCard key={s.uid || `${s.id || s.name}-${i}`} item={s} disabled={disabled} testId={`bet-card-${s.uid}`} selected={selectedUids.includes(s.uid)} onSelect={onToggle} />
+         ))}
+       </SkinGrid>
+       <SkinPagination page={currentPage} pages={pages} onChange={setPage} label={t("skins.mine_pages")} testId="inventory-pagination" />
+     </div>
+   );
+-};
++});
+ 
+ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, onPurchased, betSkins = [], onToggleBetSkin, sound, disabled }) {
+   const { authUser, openAuth } = useAuth();
+@@ -94,6 +94,16 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, on
+   const [pageSize, setPageSize] = useState(getPageSize);
+   const [mobileTab, setMobileTab] = useState("mine");
+   const [leftMode, setLeftMode] = useState("mine");
++  const selectedUids = useMemo(() => betSkins.map((skin) => skin.uid), [betSkins]);
++  const selectOwned = useCallback((skin) => {
++    playTick(sound);
++    onToggleBetSkin(skin);
++  }, [sound, onToggleBetSkin]);
++  const selectTarget = useCallback((item) => {
++    playTick(sound);
++    // Functional update preserves every toggle, even multiple clicks in one frame.
++    onSelectTarget((current) => current?.id === item.id ? null : item);
++  }, [sound, onSelectTarget]);
+   useEffect(() => {
+     const resize = () => setPageSize(getPageSize());
+     window.addEventListener("resize", resize);
+@@ -104,18 +114,18 @@ export default function SkinsSection({ onTopUp, user, target, onSelectTarget, on
+       <MobileTabs t={t} value={mobileTab} onChange={setMobileTab} />
+       <div className={`blox-panel flex-col overflow-hidden ${mobileTab === "mine" ? "flex" : "hidden lg:flex"}`} data-testid="my-skins-panel">
+         <div className={leftMode === "mine" ? "flex flex-1 flex-col" : "hidden"}>
+-          <PanelHeader title={<><InventoryTabs value="mine" onChange={setLeftMode} /><span>{t("skins.mine")}</span></>}>
++          <PanelHeader title={<>{leftMode === "mine" && <InventoryTabs value="mine" onChange={setLeftMode} />}<span>{t("skins.mine")}</span></>}>
+             {authUser && <div className="ml-auto min-w-0 flex items-center gap-2 h-9 px-2 rounded-lg bg-[#0f1015] whitespace-nowrap" title={t("skins.inventory_value_hint")} data-testid="inventory-value-chip">
+               <span className="inventory-caption text-[11px] text-[#8e91a3]">{t("skins.inventory")} · {user?.skins?.length || 0}</span>
+               <span className="min-w-0 text-[13px] font-bold text-[#ffb000] tabular-nums flex items-center gap-1" data-testid="inventory-value"><span className="truncate">{formatMoney(inventoryTotal(user?.skins))}</span> <RobuxIcon size={10} className="shrink-0" /></span>
+             </div>}
+           </PanelHeader>
+-          {authUser ? <UserInventory key={user?.session_id || "inventory"} t={t} disabled={disabled} skins={user?.skins || []} pageSize={pageSize} onTopUp={onTopUp} selectedUids={betSkins.map((b) => b.uid)} onToggle={(skin) => { playTick(sound); onToggleBetSkin(skin); }} /> : <GuestInventory t={t} onLogin={openAuth} />}
++          {authUser ? <UserInventory key={user?.session_id || "inventory"} t={t} disabled={disabled} skins={user?.skins || []} pageSize={pageSize} onTopUp={onTopUp} selectedUids={selectedUids} onToggle={selectOwned} /> : <GuestInventory t={t} onLogin={openAuth} />}
+         </div>
+-        <SkinShop key={authUser?.session_id || "guest"} active={leftMode === "store"} tabs={<InventoryTabs value="store" onChange={setLeftMode} />} pageSize={pageSize} user={user} disabled={disabled} onTopUp={onTopUp} onPurchased={(updated) => { onPurchased?.(updated); setLeftMode("mine"); }} />
++        <SkinShop key={authUser?.session_id || "guest"} active={leftMode === "store"} tabs={leftMode === "store" ? <InventoryTabs value="store" onChange={setLeftMode} /> : null} pageSize={pageSize} user={user} disabled={disabled} onTopUp={onTopUp} onPurchased={(updated) => { onPurchased?.(updated); setLeftMode("mine"); }} />
+       </div>
+       <div className={`blox-panel flex-col overflow-hidden ${mobileTab === "shop" ? "flex" : "hidden lg:flex"}`} data-testid="shop-panel">
+-        <SkinCatalog pageSize={pageSize} title={t("skins.shop")} renderItem={(item) => <SkinCard key={item.id} item={item} disabled={disabled} testId={`shop-skin-${item.id}`} selected={target?.id === item.id} onClick={() => { playTick(sound); onSelectTarget(target?.id === item.id ? null : item); }} />} />
++        <SkinCatalog pageSize={pageSize} title={t("skins.shop")} renderItem={(item) => <SkinCard key={item.id} item={item} disabled={disabled} testId={`shop-skin-${item.id}`} selected={target?.id === item.id} onSelect={selectTarget} />} />
+       </div>
+     </section>
+   );
+diff --git a/frontend/src/components/Gauge.jsx b/frontend/src/components/Gauge.jsx
+index b14ea68..d1a7754 100644
+--- a/frontend/src/components/Gauge.jsx
++++ b/frontend/src/components/Gauge.jsx
+@@ -23,7 +23,7 @@ const RAYS = Array.from({ length: 60 }, (_, i) => {
+ // so the zone grows from the bottom upward on both sides instead of rotating into place.
+ const halfDash = (half) => ({ strokeDasharray: `${(CIRC * half) / 360} ${CIRC}`, strokeDashoffset: -CIRC / 4 });
+ 
+-export default function Gauge({ chance, rotation, spinning, fast, result, cashback, onSpinEnd }) {
++const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, result, cashback, onSpinEnd }) {
+   const { t } = useLang();
+   const half = Math.max(0, Math.min(chance * 180, 179.9));
+   const dash = halfDash(half);
+@@ -119,4 +119,6 @@ export default function Gauge({ chance, rotation, spinning, fast, result, cashba
+       </div>
+     </div>
+   );
+-}
++});
++
++export default Gauge;
+diff --git a/frontend/src/components/skins/SkinGrid.jsx b/frontend/src/components/skins/SkinGrid.jsx
+index 7ff8067..0ac0de1 100644
+--- a/frontend/src/components/skins/SkinGrid.jsx
++++ b/frontend/src/components/skins/SkinGrid.jsx
+@@ -3,21 +3,24 @@ import { Logo, RobuxIcon } from "../Logo";
+ import { formatMoney } from "../../lib/api";
+ import { rarityColor, rarityLabel } from "../../lib/rarity";
+ import { skinImg } from "../../lib/img";
++import { useLang } from "../../lib/i18n";
+ 
+ const EmptySlot = () => <div className="skin-slot" aria-hidden="true" />;
+ 
+-export const SkinCard = ({ item, onClick, selected, disabled, testId }) => {
++export const SkinCard = React.memo(function SkinCard({ item, onClick, onSelect, selected, disabled, testId }) {
++  useLang(); // Memoized cards still refresh their price/rarity labels on locale changes.
+   const color = rarityColor(item.rarity);
+-  const Tag = onClick ? "button" : "div";
++  const interactive = Boolean(onClick || onSelect);
++  const Tag = interactive ? "button" : "div";
+   return (
+     <Tag
+-      type={onClick ? "button" : undefined}
+-      disabled={onClick ? disabled : undefined}
+-      aria-pressed={onClick ? Boolean(selected) : undefined}
++      type={interactive ? "button" : undefined}
++      disabled={interactive ? disabled : undefined}
++      aria-pressed={interactive ? Boolean(selected) : undefined}
+       aria-label={`${item.type} ${item.name}, ${formatMoney(item.price)} RAP`}
+-      className={`skin-slot skin-card w-full ${onClick ? "cursor-pointer disabled:cursor-wait" : ""} ${selected ? "selected" : ""}`}
++      className={`skin-slot skin-card w-full ${interactive ? "cursor-pointer disabled:cursor-wait" : ""} ${selected ? "selected" : ""}`}
+       style={{ "--rarity": color }}
+-      onClick={onClick}
++      onClick={onSelect ? () => onSelect(item) : onClick}
+       data-testid={testId || `skin-${item.uid || item.id}`}
+       data-rarity={item.rarity || "stock"}
+     >
+@@ -27,14 +30,14 @@ export const SkinCard = ({ item, onClick, selected, disabled, testId }) => {
+         </span>
+         <span className="rarity-dot" title={rarityLabel(item.rarity)} />
+       </div>
+-      {item.image && <img src={skinImg(item.image)} alt={item.name} width={128} height={128} loading="lazy" decoding="async" className="absolute inset-0 m-auto w-3/5 h-3/5 object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]" />}
++      {item.image && <img src={skinImg(item.image)} alt={item.name} draggable={false} width={128} height={128} loading="lazy" decoding="async" className="absolute inset-0 m-auto w-3/5 h-3/5 object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]" />}
+       <div className="absolute inset-x-1 bottom-1.5 text-center">
+         <div className="text-[8px] text-[#7d8194] truncate">{item.type}</div>
+         <div className="text-[10px] font-bold truncate">{item.name}</div>
+       </div>
+     </Tag>
+   );
+-};
++});
+ 
+ export const PanelHeader = ({ title, children }) => (
+   <div className="skin-panel-header">
+diff --git a/frontend/src/components/skins/SkinCatalog.jsx b/frontend/src/components/skins/SkinCatalog.jsx
+index 2094bb7..803306d 100644
+--- a/frontend/src/components/skins/SkinCatalog.jsx
++++ b/frontend/src/components/skins/SkinCatalog.jsx
+@@ -48,6 +48,7 @@ export default function SkinCatalog({ pageSize, title, headerAction, renderItem,
+ 
+   useEffect(() => {
+     let alive = true;
++    const controller = new AbortController();
+     setLoading(true);
+     setError(null);
+     const params = { sort, page: shopPage, limit: pageSize };
+@@ -55,7 +56,7 @@ export default function SkinCatalog({ pageSize, title, headerAction, renderItem,
+     if (maxPrice !== "" && Number.isFinite(Number(maxPrice))) params.max_price = Number(maxPrice);
+     if (query) params.q = query;
+     const timer = setTimeout(() => api
+-      .shop(params)
++      .shop(params, { signal: controller.signal })
+       .then((d) => {
+         if (!alive) return;
+         setItems(d.items || []);
+@@ -67,6 +68,7 @@ export default function SkinCatalog({ pageSize, title, headerAction, renderItem,
+     return () => {
+       alive = false;
+       clearTimeout(timer);
++      controller.abort();
+     };
+   }, [sort, minPrice, maxPrice, query, retry, shopPage, pageSize]);
+ 
+diff --git a/frontend/src/components/skins/SkinShop.jsx b/frontend/src/components/skins/SkinShop.jsx
+index 9ee8827..f7c911d 100644
+--- a/frontend/src/components/skins/SkinShop.jsx
++++ b/frontend/src/components/skins/SkinShop.jsx
+@@ -1,4 +1,4 @@
+-import React, { useRef, useState } from "react";
++import React, { useEffect, useRef, useState } from "react";
+ import { Minus, Plus, ShoppingCart, Trash2 } from "lucide-react";
+ import { toast } from "sonner";
+ import { api, formatMoney } from "../../lib/api";
+@@ -26,6 +26,8 @@ export default function SkinShop({ active, tabs, pageSize, user, disabled, onTop
+   const [open, setOpen] = useState(false);
+   const [busy, setBusy] = useState(false);
+   const [uncertain, setUncertain] = useState(false);
++  const [visited, setVisited] = useState(active);
++  useEffect(() => { if (active) setVisited(true); }, [active]);
+   const attempt = useRef(null);
+   const submitting = useRef(false);
+   const count = cart.reduce((sum, row) => sum + row.quantity, 0);
+@@ -78,7 +80,7 @@ export default function SkinShop({ active, tabs, pageSize, user, disabled, onTop
+   return (
+     <>
+       <div className={active ? "flex flex-1 flex-col" : "hidden"} data-testid="balance-store">
+-        {active && <SkinCatalog pageSize={pageSize} title={tabs} headerAction={
++        {(active || visited) && <SkinCatalog pageSize={pageSize} title={tabs} headerAction={
+           <button type="button" onClick={() => setOpen(true)} className="relative h-9 shrink-0 px-2 rounded-lg bg-[#ffb000] hover:bg-[#ffc233] text-black flex items-center gap-1 font-bold text-[12px]" aria-label={t("store.cart")} title={t("store.cart")} data-testid="store-cart-button">
+             <ShoppingCart size={17} /> {count > 0 && <span data-testid="store-cart-count">{count}</span>}
+           </button>
+diff --git a/frontend/src/lib/api.js b/frontend/src/lib/api.js
+index 8afad83..a80ad79 100644
+--- a/frontend/src/lib/api.js
++++ b/frontend/src/lib/api.js
+@@ -53,7 +53,7 @@ export const api = {
+   me: () => http.get(`/auth/me`).then((r) => r.data),
+   logout: () => http.post(`/auth/logout`).then((r) => r.data),
+   liveDrops: (limit = 30) => http.get(`/live-drops`, { params: { limit, include_best: true } }).then((r) => r.data),
+-  shop: (params) => http.get(`/shop`, { params }).then((r) => r.data),
++  shop: (params, options = {}) => http.get(`/shop`, { params, signal: options.signal }).then((r) => r.data),
+   buySkins: (payload) => http.post(`/shop/buy`, payload).then((r) => r.data),
+   upgrade: (payload) => http.post(`/upgrade`, payload).then((r) => r.data),
+   depositInfo: () => http.get(`/deposit/info`).then((r) => r.data),
+@@ -85,8 +85,16 @@ export const api = {
+   withdrawSkins: (uids) => http.post(`/skins/withdraw`, { uids }).then((r) => r.data),
+ };
+ 
+-export const formatNumber = (n) =>
+-  new Intl.NumberFormat(getLang() === "en" ? "en-US" : "ru-RU").format(Math.round(Number(n) || 0));
++// Construct formatters once per locale, not twice per card on every click.
++const formatters = new Map();
++const formatter = (money = false) => {
++  const locale = getLang() === "en" ? "en-US" : "ru-RU";
++  const key = `${locale}:${money}`;
++  if (!formatters.has(key)) formatters.set(key, new Intl.NumberFormat(locale,
++    money ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : undefined));
++  return formatters.get(key);
++};
++export const formatNumber = (n) => formatter().format(Math.round(Number(n) || 0));
+ 
+ // Сервер отдаёт даты из Mongo «голыми» (без часового пояса, по факту UTC).
+ // Без поправки браузер читает их как локальное время и все часы плывут
+@@ -96,8 +104,7 @@ export const parseServerDate = (d) => {
+   return new Date(d);
+ };
+ 
+-export const formatMoney = (n) =>
+-  new Intl.NumberFormat(getLang() === "en" ? "en-US" : "ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
++export const formatMoney = (n) => formatter(true).format(Number(n) || 0);
+ 
+ export const inventoryTotal = (skins) => (skins || []).reduce((a, s) => a + Number(s.price || 0), 0);
+ 
+diff --git a/frontend/src/lib/sound.js b/frontend/src/lib/sound.js
+index 292bf0e..e218d30 100644
+--- a/frontend/src/lib/sound.js
++++ b/frontend/src/lib/sound.js
+@@ -73,8 +73,13 @@ export const playResultSound = (win, enabled) => {
+   } catch { /* Audio failure must never prevent settlement. */ }
+ };
+ 
++let lastTick = -Infinity;
+ export const playTick = (enabled) => {
+   if (!enabled || !clickAudio) return;
++  // Limit only overlapping sound restarts, never the actual selection clicks.
++  const now = performance.now();
++  if (now - lastTick < 50) return;
++  lastTick = now;
+   try {
+     clickAudio.currentTime = 0;
+     clickAudio.volume = MEDIA_VOLUME;
+diff --git a/frontend/craco.config.js b/frontend/craco.config.js
+index 56c839a..5ef2b54 100644
+--- a/frontend/craco.config.js
++++ b/frontend/craco.config.js
+@@ -70,6 +70,18 @@ if (config.enableHealthCheck) {
+ }
+ 
+ let webpackConfig = {
++  jest: {
++    configure: (jestConfig) => {
++      // CRA's Jest 27 does not understand React Router 7's package exports.
++      jestConfig.moduleNameMapper = {
++        ...jestConfig.moduleNameMapper,
++        "^@/(.*)$": "<rootDir>/src/$1",
++        "^react-router-dom$": require.resolve("react-router-dom").replace(/\.mjs$/, ".js"),
++        "^react-router/dom$": require.resolve("react-router/dom").replace(/\.mjs$/, ".js"),
++      };
++      return jestConfig;
++    },
++  },
+   eslint: {
+     configure: {
+       extends: ["plugin:react-hooks/recommended"],
+diff --git a/frontend/src/setupTests.js b/frontend/src/setupTests.js
+new file mode 100644
+index 0000000..b7641e6
+--- /dev/null
++++ b/frontend/src/setupTests.js
+@@ -0,0 +1,4 @@
++// Browser APIs provided by modern browsers but not CRA's older jsdom.
++const { TextEncoder, TextDecoder } = require("util");
++global.TextEncoder = TextEncoder;
++global.TextDecoder = TextDecoder;
+\ No newline at end of file
+diff --git a/frontend/src/components/SkinsSection.test.jsx b/frontend/src/components/SkinsSection.test.jsx
+index 5bb4c5e..4a5b086 100644
+--- a/frontend/src/components/SkinsSection.test.jsx
++++ b/frontend/src/components/SkinsSection.test.jsx
+@@ -1,5 +1,6 @@
+ import React, { act, useState } from "react";
+ import { createRoot } from "react-dom/client";
++import { MemoryRouter } from "react-router-dom";
+ import SkinsSection from "./SkinsSection";
+ import { api } from "../lib/api";
+ import { LangProvider } from "../lib/i18n";
+@@ -20,7 +21,7 @@ function Harness({ inventory = skins }) {
+   const [selected, setSelected] = useState([]);
+   const [target, setTarget] = useState(null);
+   const [balance, setBalance] = useState(1000);
+-  return <LangProvider><SkinsSection user={{ session_id: "player", balance, skins: inventory }} onPurchased={(user) => setBalance(user.balance)} betSkins={selected} onToggleBetSkin={(skin) => setSelected((current) => [...current, skin])} target={target} onSelectTarget={setTarget} /></LangProvider>;
++  return <MemoryRouter initialEntries={["/ru"]}><LangProvider><SkinsSection user={{ session_id: "player", balance, skins: inventory }} onPurchased={(user) => setBalance(user.balance)} betSkins={selected} onToggleBetSkin={(skin) => setSelected((current) => [...current, skin])} target={target} onSelectTarget={setTarget} /></LangProvider></MemoryRouter>;
+ }
+ 
+ beforeEach(async () => {
+@@ -60,7 +61,7 @@ test("both lists have independent pages and retain selected skins", async () =>
+   expect(byId("shop-skin-skin-0")).not.toBeNull();
+   await click("shop-pagination-page-3");
+   await load();
+-  expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 3, limit: 25 });
++  expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 3, limit: 25 }, { signal: expect.any(AbortSignal) });
+   expect(document.querySelectorAll('[data-testid^="shop-skin-"]')).toHaveLength(2);
+   expect(byId("shop-grid").firstElementChild.children).toHaveLength(25);
+   await click("inventory-pagination-page-1");
+@@ -79,7 +80,7 @@ test("search from a later page resets the catalog to page one", async () => {
+     input.dispatchEvent(new Event("input", { bubbles: true }));
+   });
+   await load();
+-  expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 1, limit: 25, q: "Skin 31" });
++  expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 1, limit: 25, q: "Skin 31" }, { signal: expect.any(AbortSignal) });
+   expect(byId("shop-skin-skin-31")).not.toBeNull();
+   expect(byId("shop-pagination-page-1").getAttribute("aria-current")).toBe("page");
+   expect(byId("shop-grid").firstElementChild.children).toHaveLength(25);
+@@ -101,7 +102,7 @@ test("resizing keeps five rows in both lists and resets to an available page", a
+   for (const [width, size] of [[800, 20], [390, 15], [1280, 25]]) {
+     await act(async () => { window.innerWidth = width; window.dispatchEvent(new Event("resize")); });
+     await load();
+-    expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 1, limit: size });
++    expect(api.shop).toHaveBeenLastCalledWith({ sort: "price_desc", page: 1, limit: size }, { signal: expect.any(AbortSignal) });
+     expect(byId("inventory-grid").firstElementChild.children).toHaveLength(size);
+     expect(byId("shop-grid").firstElementChild.children).toHaveLength(size);
+     expect(byId("inventory-pagination-page-1").getAttribute("aria-current")).toBe("page");
+@@ -154,3 +155,51 @@ test("an interrupted purchase retries the same request without changing the cart
+   expect(api.buySkins).toHaveBeenCalledTimes(2);
+   expect(api.buySkins.mock.calls[1][0]).toEqual(api.buySkins.mock.calls[0][0]);
+ });
++
++test("all rapid toggles are applied even before React commits the next frame", async () => {
++  const card = byId("shop-skin-skin-0");
++  await act(async () => { for (let i = 0; i < 100; i += 1) card.click(); });
++  expect(card.getAttribute("aria-pressed")).toBe("false");
++  await act(async () => { for (let i = 0; i < 101; i += 1) card.click(); });
++  expect(card.getAttribute("aria-pressed")).toBe("true");
++  await act(async () => {
++    byId("shop-skin-skin-1").click();
++    byId("shop-skin-skin-2").click();
++  });
++  expect(card.getAttribute("aria-pressed")).toBe("false");
++  expect(byId("shop-skin-skin-2").getAttribute("aria-pressed")).toBe("true");
++});
++
++test("repeated tab switches retain the loaded store page without more requests", async () => {
++  await click("inventory-tab-store");
++  await load();
++  await click("store-shop-pagination-page-2");
++  await load();
++  const requests = api.shop.mock.calls.length;
++  for (let i = 0; i < 10; i += 1) {
++    await click("inventory-tab-mine");
++    await click("inventory-tab-store");
++  }
++  await load();
++  expect(api.shop).toHaveBeenCalledTimes(requests);
++  expect(byId("store-shop-pagination-page-2").getAttribute("aria-current")).toBe("page");
++  expect(byId("store-skin-skin-25")).not.toBeNull();
++});
++
++test("superseded requests are aborted and late responses cannot replace the latest page", async () => {
++  let resolveOld;
++  api.shop.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
++  await click("shop-pagination-page-2");
++  await load();
++  const oldSignal = api.shop.mock.calls[api.shop.mock.calls.length - 1][1].signal;
++  await act(async () => {
++    const input = byId("search-input");
++    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "Skin 31");
++    input.dispatchEvent(new Event("input", { bubbles: true }));
++  });
++  expect(oldSignal.aborted).toBe(true);
++  await load();
++  await act(async () => { resolveOld({ items: [skins[0]], total: 52, page: 2 }); });
++  expect(byId("shop-skin-skin-31")).not.toBeNull();
++  expect(byId("shop-skin-skin-0")).toBeNull();
++});
+diff --git a/frontend/src/components/PointerEventsGuard.test.jsx b/frontend/src/components/PointerEventsGuard.test.jsx
+new file mode 100644
+index 0000000..feed3ae
+--- /dev/null
++++ b/frontend/src/components/PointerEventsGuard.test.jsx
+@@ -0,0 +1,128 @@
++import React from "react";
++import { act } from "react";
++import { createRoot } from "react-dom/client";
++import PointerEventsGuard from "./PointerEventsGuard";
++
++let container;
++let root;
++
++beforeEach(() => {
++  global.IS_REACT_ACT_ENVIRONMENT = true;
++  jest.useFakeTimers();
++  document.body.innerHTML = "";
++  document.body.style.pointerEvents = "";
++  container = document.createElement("div");
++  document.body.appendChild(container);
++  root = createRoot(container);
++});
++
++afterEach(async () => {
++  await act(async () => {
++    root.unmount();
++  });
++  container.remove();
++  document.body.style.pointerEvents = "";
++  jest.useRealTimers();
++});
++
++test("recovers orphan body pointer lock within bounded time under continuous mutations", async () => {
++  await act(async () => {
++    root.render(<PointerEventsGuard />);
++  });
++
++  document.body.setAttribute("style", "pointer-events: none;");
++  // MutationObserver is a microtask: deliver the lock notification before
++  // advancing fake time (the browser does this between every timer task).
++  await act(async () => { await Promise.resolve(); });
++
++  const spam = document.createElement("div");
++  spam.setAttribute("data-state", "closed");
++  document.body.appendChild(spam);
++  const mutator = setInterval(() => {
++    spam.setAttribute("data-state", spam.getAttribute("data-state") === "closed" ? "closing" : "closed");
++    spam.style.opacity = String(Math.random());
++    const child = document.createElement("span");
++    spam.appendChild(child);
++    spam.removeChild(child);
++  }, 16);
++
++  for (let frame = 0; frame < 32; frame += 1) {
++    await act(async () => {
++      jest.advanceTimersByTime(16);
++      await Promise.resolve();
++    });
++  }
++
++  clearInterval(mutator);
++  expect(document.body.style.pointerEvents).toBe("");
++});
++
++test("does not clear lock while an actual open dialog layer exists", async () => {
++  const openDialog = document.createElement("div");
++  openDialog.setAttribute("role", "dialog");
++  openDialog.setAttribute("data-state", "open");
++  document.body.appendChild(openDialog);
++
++  await act(async () => {
++    root.render(<PointerEventsGuard />);
++  });
++
++  document.body.setAttribute("style", "pointer-events: none;");
++
++  await act(async () => {
++    jest.advanceTimersByTime(400);
++  });
++
++  expect(document.body.style.pointerEvents).toBe("none");
++});
++
++test("restores pointer events after open dialog closes", async () => {
++  const openDialog = document.createElement("div");
++  openDialog.setAttribute("role", "dialog");
++  openDialog.setAttribute("data-state", "open");
++  document.body.appendChild(openDialog);
++
++  await act(async () => {
++    root.render(<PointerEventsGuard />);
++  });
++
++  document.body.setAttribute("style", "pointer-events: none;");
++
++  await act(async () => {
++    jest.advanceTimersByTime(200);
++  });
++  expect(document.body.style.pointerEvents).toBe("none");
++
++  openDialog.setAttribute("data-state", "closed");
++
++  await act(async () => {
++    jest.advanceTimersByTime(400);
++  });
++
++  expect(document.body.style.pointerEvents).toBe("");
++});
++
++test.each(["dialog", "alertdialog", "menu", "listbox"])("preserves an open %s lock through repeated checks", async (role) => {
++  const layer = document.createElement("div");
++  layer.setAttribute("role", role);
++  layer.setAttribute("data-state", "open");
++  document.body.appendChild(layer);
++  document.body.style.pointerEvents = "none";
++  await act(async () => { root.render(<PointerEventsGuard />); });
++  await act(async () => { jest.advanceTimersByTime(3000); });
++  expect(document.body.style.pointerEvents).toBe("none");
++  layer.remove();
++  await act(async () => { await Promise.resolve(); });
++  await act(async () => { jest.advanceTimersByTime(350); });
++  expect(document.body.style.pointerEvents).toBe("");
++});
++
++test("a leftover tooltip popper is not a modal lock owner", async () => {
++  const wrapper = document.createElement("div");
++  wrapper.setAttribute("data-radix-popper-content-wrapper", "");
++  document.body.appendChild(wrapper);
++  document.body.style.pointerEvents = "none";
++  await act(async () => { root.render(<PointerEventsGuard />); });
++  await act(async () => { jest.advanceTimersByTime(350); });
++  expect(document.body.style.pointerEvents).toBe("");
++});

@@ -1,0 +1,21 @@
+{
+  "summary": "Smoke test after Emergent dependency removal. Backend healthy, 10/10 pytest passing (root, health, rarities, game-config, stats, live-drops, shop, admin login+session, wrong last word=403, UA mismatch rejected). Frontend loads cleanly with no console errors, no 'Made with Emergent' badge, no requests to assets.emergent.sh or ap.emergent.sh. BLOXGRADE header, 'Log in with Discord' button, and skin catalog all render. RU/EN language toggle switches locale correctly. /admin renders the 10-input phrase form; logging in with the seed phrase opens the full admin panel (Chats, Deposits, Withdrawals, Bank, Players, Promocodes, Luck).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_emergent_removal_smoke.py",
+    "/app/test_reports/pytest/iteration3_smoke.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is very large (2350+ lines) with many router endpoints inline; consider splitting into routers per domain (admin, payments, shop, upgrade) for maintainability. Not a blocker for this smoke test."
+  ],
+  "updated_files": ["/app/backend/tests/test_emergent_removal_smoke.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin phrase: alpha bravo charlie delta echo foxtrot golf hotel india juliet",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All Emergent branding/dependencies successfully removed. grep for 'emergent' in index.html, package.json, craco.config.js, requirements.txt, server.py returns zero matches. Discord OAuth flow is not testable in preview (placeholder credentials). Admin login enforces same User-Agent for session validation (verified).",
+  "rca of the issue": "N/A - regression smoke test after cleanup; no issues found."
+}

@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 4: Live chat + admin chats-tab overhaul verified end-to-end. Backend 6/6 pytest passing (deposit min RAP 200, guest single-chat + 429 cooldown on close/reopen, admin listing/search, deposit preview+confirm w/ bank_ledger, bulk withdrawals done + per-item cancel, guest-deposit rejection). Frontend admin panel loads with Chats tab active by default, old Deposits/Withdrawals tabs are GONE, filters (Новые 9 / В работе / Закрытые / Все) present, search+dot+balance render, PlayerPanel with deposit preview '240.00 RAP' after 20% fee works, withdrawals card shows rows/total/'Всё выдано (2)'/per-row cancel dialog with reason chips + confirm. Site live chat widget: cat avatar toggle, glass panel with no central welcome block, chat-input/send, cooldown 'Завершить можно через 2:59'. Russian 'ПОПОЛНЕНИЕ' badge shown, no English 'TOP-UP'. Home regression: 'за 24 часа' best-drop label present, no console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PlayerPanel deposit quick-amounts", "issue": "Missing quick button for 250 RAP. Only 200/500/1000/2500 rendered. Spec says quick amounts should mirror site (200/250/500/1000/2500).", "selector": "[data-testid=\"admin-chat-quick-250\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4_livechat.py",
+    "/app/test_reports/pytest/iteration4_livechat.xml",
+    "/app/test_reports/screenshots_iteration_4/home_livechat.jpeg",
+    "/app/test_reports/screenshots_iteration_4/admin_chats.jpeg",
+    "/app/test_reports/screenshots_iteration_4/admin_withdrawals.jpeg"
+  ],
+  "action_items": [
+    "Add admin-chat-quick-250 button to PlayerPanel deposit quick-amount row so it matches site quick amounts (200/250/500/1000/2500)."
+  ],
+  "critical_code_review_comments": [
+    "server.py still ~2600 lines with all admin/chat/deposit endpoints inline; consider splitting live-chat admin endpoints (deposit preview/confirm/withdrawals-done) into a dedicated router alongside the existing live_chat.py module for readability.",
+    "admin_chat_deposit re-creates a Deposit record on the fly if none is pending; consider always requiring an existing deposit-kind chat request to keep the audit trail explicit."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration4_livechat.py", "/app/test_reports/iteration_4.json"],
+  "success_rate": {"backend": "100%", "frontend": "~95%"},
+  "test_credentials": "Admin phrase & QA JWT per /app/memory/test_credentials.md",
+  "seed_data_creation": "Temporary: 2 pending withdrawals for QA user (deleted after UI verification). Ephemeral guest chats created and cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration4_livechat.py can be re-used as regression. It writes/cleans its own withdrawals prefixed ITER4_. QA user (test-session-qa-1) balance grows every time deposit test runs — expected. Only known issue: admin PlayerPanel is missing the 250 RAP quick button.",
+  "rca of the issue": "PlayerPanel deposit QUICK array in /app/frontend/src/components/admin/chat/PlayerPanel.jsx omits 250; add 250 between 200 and 500 to align with AmountStep QUICK list."
+}

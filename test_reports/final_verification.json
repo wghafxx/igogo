@@ -1,0 +1,17 @@
+{
+  "baseline_commit": "669733263b6bdbfa48e0d17073ab75df744d5e21",
+  "agent_report": "/app/test_reports/iteration_1.json",
+  "resolved_followup_issues": [
+    "Jest resolves CommonJS React Router exports and provides TextEncoder/TextDecoder",
+    "Component test harness supplies MemoryRouter",
+    "MutationObserver microtasks are delivered between fake timer frames"
+  ],
+  "frontend_unit": {"passed": 18, "failed": 0, "log": "/app/test_reports/frontend-unit.log"},
+  "backend_smoke": {"passed": 4, "failed": 0},
+  "production_build": {"passed": true, "log": "/app/test_reports/frontend-build.log"},
+  "stress": {"actual_browser_events_per_second": 155.8, "duration_seconds": 25, "inventory_items": 120, "post_burst_mouse_failures": 0, "method": "batched browser click events, not an OS autoclicker"},
+  "responsive": {"desktop": "1920x800, empty overflow check", "mobile": "390x844, document width 390, empty right-overflow check at end of intentionally scrollable live feed"},
+  "limitations": ["No organic full browser or GPU crash reproduced", "Discord OAuth and real payments not configured or tested in this workspace"],
+  "mocked_apis": [],
+  "test_credentials": "/app/memory/test_credentials.md"
+}
