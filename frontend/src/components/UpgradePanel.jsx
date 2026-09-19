@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import Gauge from "./Gauge";
 import AnimButton from "./AnimButton";
@@ -71,10 +71,25 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
   const [result, setResult] = useState(null);
   const [lockedChance, setLockedChance] = useState(null);
   const settleUntil = useRef(0);
+  const clearTimer = useRef(null);
+  const clearResult = useCallback(() => {
+    if (busyRef.current) return;
+    setLockedChance(null);
+    setResult(null);
+  }, []);
+  const scheduleClear = useCallback((delay) => {
+    clearTimeout(clearTimer.current);
+    clearTimer.current = setTimeout(clearResult, Math.max(0, delay));
+  }, [clearResult]);
+  useEffect(() => () => clearTimeout(clearTimer.current), []);
   const { rotation, spinning, fast, cashback, phrase, busyRef, runSpin, finishSpin } = useUpgradeSpin({
     settings, onUpgraded, onSpinningChange, onChance: setLockedChance,
     onResult: (value) => {
-      if (value) settleUntil.current = Date.now() + 1500;
+      clearTimeout(clearTimer.current);
+      if (value) {
+        settleUntil.current = Date.now() + 1500;
+        scheduleClear(4000);
+      }
       setResult(value);
     },
   });
@@ -95,12 +110,13 @@ export default function UpgradePanel({ sessionId, user, settings, onSettingsChan
   const targetKey = `${target?.id || ""}|${betSkins.map((s) => s.uid).join(",")}`;
   const prevKey = useRef(targetKey);
   useEffect(() => {
-    if (prevKey.current !== targetKey && !busyRef.current && Date.now() > settleUntil.current) {
-      setLockedChance(null);
-      setResult(null);
+    if (prevKey.current !== targetKey && !busyRef.current) {
+      const wait = settleUntil.current - Date.now();
+      if (wait > 0) scheduleClear(wait);
+      else clearResult();
     }
     prevKey.current = targetKey;
-  }, [targetKey, busyRef]);
+  }, [targetKey, busyRef, scheduleClear, clearResult]);
 
   const clampChance = (c) => Math.max(cfg.min_chance, Math.min(MAX_CHANCE, c));
   // Показ: bet / price без house edge (20 на кейс 40 = 50%).
