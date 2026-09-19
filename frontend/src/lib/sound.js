@@ -3,6 +3,12 @@ const resultAudio = typeof Audio !== "undefined" ? {
   win: new Audio("/sounds/win.mp3"),
   lose: new Audio("/sounds/lose.mp3"),
 } : {};
+const rareAudio = typeof Audio !== "undefined" ? {
+  casino: new Audio("/sounds/casino.mp3"),
+  mellstroy: new Audio("/sounds/mellstroy.mp3"),
+} : {};
+const RARE_VOLUME = { casino: 0.12, mellstroy: 0.3 };
+Object.entries(rareAudio).forEach(([key, audio]) => { audio.preload = "auto"; audio.volume = RARE_VOLUME[key]; });
 Object.values(resultAudio).forEach((audio) => { audio.preload = "auto"; });
 let context;
 let activeSource;
@@ -48,6 +54,16 @@ export const stopResultSound = () => {
     activeSource = null;
   }
   Object.values(resultAudio).forEach((audio) => { audio.pause(); audio.currentTime = 0; });
+  Object.values(rareAudio).forEach((audio) => { audio.pause(); audio.currentTime = 0; });
+};
+
+export const playRareSound = (key, enabled) => {
+  if (!enabled || !rareAudio[key]) return;
+  stopResultSound();
+  try {
+    rareAudio[key].volume = RARE_VOLUME[key];
+    rareAudio[key].play().catch(() => {});
+  } catch { /* Audio failure must never prevent settlement. */ }
 };
 
 export const playResultSound = (win, enabled) => {

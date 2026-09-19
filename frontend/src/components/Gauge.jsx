@@ -24,14 +24,16 @@ const RAYS = Array.from({ length: 60 }, (_, i) => {
 // so the zone grows from the bottom upward on both sides instead of rotating into place.
 const halfDash = (half) => ({ strokeDasharray: `${(CIRC * half) / 360} ${CIRC}`, strokeDashoffset: -CIRC / 4 });
 
-const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, result, cashback, onSpinEnd }) {
+const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, result, phrase, onSpinEnd }) {
   const { t } = useLang();
   const half = Math.max(0, Math.min(chance * 180, 179.9));
   const dash = halfDash(half);
 
   const ringClass = `gauge-ring ${fast ? "fast" : ""}`;
+  const rare = Boolean(phrase && phrase.endsWith("_rare"));
   const centerColor = result === "win" ? "#3ddc84" : result === "lose" ? "#ff5c5c" : "#ffffff";
   const chanceLabel = chance <= 0.15 ? t("gauge.low") : chance <= 0.5 ? t("gauge.mid") : t("gauge.high");
+  const resultLabel = phrase ? t(phrase) : result === "win" ? t("gauge.win") : t("gauge.lose");
   const pTop = CY - OUTER; // outer edge of ring at top
 
   return (
@@ -42,11 +44,18 @@ const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, resu
       <svg viewBox="0 0 300 300" className="relative w-full h-full overflow-visible">
         <defs>
           <linearGradient id="zone-grad" x1="50%" y1="100%" x2="50%" y2="0%">
-            <stop offset="0%" stopColor="#4b421f" />
-            <stop offset="45%" stopColor="#a78c3e" />
-            <stop offset="78%" stopColor={rarityColor("gold")} />
-            <stop offset="100%" stopColor={rarityColor("special")} />
+            <stop offset="0%" stopColor="#be4a1d" />
+            <stop offset="45%" stopColor="#e8862f" />
+            <stop offset="80%" stopColor="#ffbf48" />
+            <stop offset="100%" stopColor="#ffe6a3" />
           </linearGradient>
+          <linearGradient id="zone-glow" x1="50%" y1="100%" x2="50%" y2="0%">
+            <stop offset="0%" stopColor="#be4a1d" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#ffbf48" stopOpacity="1" />
+          </linearGradient>
+          <filter id="zone-blur" filterUnits="userSpaceOnUse" x="-60" y="-60" width="420" height="420">
+            <feGaussianBlur stdDeviation="11" />
+          </filter>
           <filter id="zone-noise" x="0" y="0" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="7" stitchTiles="stitch" />
             <feColorMatrix type="saturate" values="0" />
@@ -84,6 +93,9 @@ const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, resu
         <g data-testid="gauge-zone">
           {[1, -1].map((dir) => (
             <g key={dir} transform={dir === -1 ? `translate(${CX * 2} 0) scale(-1 1)` : undefined}>
+              <g className="gauge-zone-halo">
+                <circle cx={CX} cy={CY} r={R} fill="none" stroke="url(#zone-glow)" strokeWidth={STROKE + 10} strokeLinecap="round" opacity="0.6" filter="url(#zone-blur)" className="gauge-zone-arc" style={dash} />
+              </g>
               <circle cx={CX} cy={CY} r={R} fill="none" stroke="url(#zone-grad)" strokeWidth={STROKE} strokeLinecap="butt" className="gauge-zone-arc" style={dash} />
               <circle cx={CX} cy={CY} r={R} fill="none" stroke="url(#zone-texture)" strokeWidth={STROKE} strokeLinecap="butt" opacity="0.14" className="gauge-zone-arc" style={dash} />
             </g>
@@ -116,8 +128,8 @@ const Gauge = React.memo(function Gauge({ chance, rotation, spinning, fast, resu
         >
           {(chance * 100).toFixed(2)}%
         </div>
-        <div className="text-[12px] text-[#7d8194] mt-1.5" data-testid="gauge-label">
-          {spinning ? t("gauge.spinning") : result === "win" ? t("gauge.win") : result === "lose" ? (Number(cashback) > 0 ? `${t("gauge.cashback")} +${Number(cashback)}` : t("gauge.lose")) : chanceLabel}
+        <div className={`text-[12px] mt-1.5 text-center px-6 leading-tight transition-colors duration-300 ${rare ? "font-black text-[#ffd44d] gauge-rare" : result && !spinning ? "font-bold text-white/85" : "text-[#7d8194]"}`} data-testid="gauge-label" data-phrase={phrase || undefined}>
+          {spinning ? t("gauge.spinning") : result ? resultLabel : chanceLabel}
         </div>
       </div>
     </div>
