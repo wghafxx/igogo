@@ -1,0 +1,33 @@
+{
+  "summary": "End-to-end tested the new staff skin-intake module. Backend pytest suite tests/test_staff_intake.py (15 tests, all passing) covers: authorization (anon→401, player→403 on /api/staff/*, staff→403 on /api/admin/*), admin add/disable/enable (disabling seed staff immediately drops /api/staff/me to 403, re-enable restores), queue+claim full flow ending at owner approve with credited==240 for 300 RAP (plan.credited exact match, deposit credited persisted, idempotent double-approve), concurrent claim by two staff (exactly one 200 and one 409 via threading), old admin routes rejected for staff deposits (/api/admin/deposits/{id}/confirm → 409), player cancel after transfer/report → 409, evidence validation (non-image → 400, >5MB → 413, missing checks → 400, total<200 → 400), revision flow (v2 report created, approving v1 → 409, approving v2 → 200), reject→return flow (owner reject with reason, staff submits return evidence, owner confirms → deposit rejected+staff_state returned), transfers (pending move confirmed once, second confirm → 409), shifts (second start → 409, pause/resume/end all 200), stats period validation (range with bad date → 400, today/all → 200). Frontend UI on public REACT_APP_BACKEND_URL /staff: anonymous shows staff-gate; localStorage bloxgrade_token=PLAYER_TOKEN shows staff-denied (backend correctly returns 403); STAFF_TOKEN shows staff-page with all tabs (staff-tab-queue/mine/transfers/stats), shift-bar, staff-transfers panel. Frontend UI /admin: seed-phrase login works, admin-tab-staff renders admin-staff-tab, admin-staff-view-review (with Telegram staff-review banner and outbox counter), admin-staff-view-people (staff-add-{discord,display,nick,link,submit} form + staff-row-* rows), clicking a staff row opens staff-detail-stats with staff-period-{today,range,all} switches. All primary data-testids from the review request are present and functional.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/staff Статистика", "issues": ["holdings tile can show negative RAP when transfers exceed accepted intake (test-data artifact; consider clamping to 0 or showing 'Расхождение' badge for negative diff)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_staff_intake.py",
+    "/app/test_reports/pytest/staff_intake.xml"
+  ],
+  "action_items": [
+    "Optional: clamp Осталось у сотрудника (holdings) tile to >=0 or annotate discrepancy when transfers > intake in stats"
+  ],
+  "critical_code_review_comments": [
+    "server.py at 3016 lines remains a modularisation candidate but staff logic itself is well split (staff_core/staff_routes/staff_shifts/staff_stats/staff_evidence/staff_telegram all <=400 lines).",
+    "staff_evidence.save uses AsyncIOMotorGridFSBucket per call; if traffic grows consider caching the bucket per db. Not blocking.",
+    "staff_core.approve second-approve returns 200 with already=True — matches idempotency requirement; verified via double-POST no double credit.",
+    "cancel_deposit blocks after report/transfer via staff_state filter — matches spec (returns 409 with correct Russian message).",
+    "Old /api/admin/deposits/{id}/confirm correctly rejects staff_flow deposits via require_not_staff_request (409)."
+  ],
+  "updated_files": ["/app/backend/tests/test_staff_intake.py (NEW)"],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all requested data-testids present and interactive)"},
+  "test_credentials": "Admin seed 'alpha bravo charlie delta echo foxtrot golf hotel india juliet' (bind to same User-Agent). STAFF_TOKEN/PLAYER_TOKEN: run `cd /app/backend && python tests/seed_staff.py`.",
+  "seed_data_creation": "During the run several TEST_*-prefixed players and their deposits/reports/moves/chats were created and cleaned up in the module-scoped autouse fixture. Extra staff members (discord_id starting with 'TESTSTAFF') are deleted at teardown. Seed staff/player remain intact for future runs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Full staff-intake regression is /app/backend/tests/test_staff_intake.py — run with `cd /app/backend && python -m pytest tests/test_staff_intake.py -n 0 -v`. Requires REACT_APP_BACKEND_URL (loaded from frontend/.env) and MONGO_URL/JWT_SECRET (backend/.env). Test uses per-test fresh TEST_ players so it is not affected by the one-active-request-per-player or 3-min chat cooldown constraints. Do NOT call /api/admin/staff-telegram/setup or /api/admin/telegram/setup in preview. Telegram bot is disabled (STAFF_TG_OWNER_ID unset) so submit_report enqueues outbox rows with status=pending — expected; admin view shows 'в очереди Telegram: N'.",
+  "rca_of_the_issue": "N/A — feature works end-to-end. Holdings can appear negative in stats when this test suite runs transfers without matching approved intakes; that is a display concern, not a money-safety bug."
+}
