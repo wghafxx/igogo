@@ -1,0 +1,33 @@
+{
+  "summary": "End-to-end validation of the review-request fixes over the public preview URL + isolated backend regression. Wrote a new live suite tests/test_live_review.py (11 tests) covering JWT revocation, chats concurrent create, admin chats paging & summary, live-drops, skin withdraw recipient snapshot + recipient_changed, admin chat deposit request_id idempotency, shop/buy idempotency, static path-traversal safety and logout. Ran isolated suite (297 passed) and existing tests/test_review_fixes.py (9 passed). Frontend smoke: home + skins grid + header balance for the seeded user (486 RAP), Top up modal Requests sub-tab exposes my-requests-tab-active/-done, promo-input/promo-apply-button visible, /en modal has 0 Russian leftovers (/ru still Russian), admin login with the 10-word seed works, chats tab loads. Money-safety code (bank/spin/deposit crediting math) was NOT touched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_review.py",
+    "/app/backend/tests/test_review_fixes.py",
+    "/app/test_reports/pytest/live_review.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~2851 lines — recommend future modularisation (auth, chats, admin, deposits, withdrawals) but nothing to change now (all endpoints properly async, use Pydantic input models, exclude Mongo _id via projections).",
+    "JWT_SECRET in backend/.env is 64 hex chars (32 bytes) so effective HMAC key is fine; PyJWT emits an InsecureKeyLengthWarning because the string length is 64 ASCII when interpreted raw. Non-blocking; consider passing the decoded 32-byte key to silence the warning."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_review.py (NEW)",
+    "/root/logs/token.txt (regenerated after logout to keep sv aligned = 3)"
+  ],
+  "success_rate": {"backend": "100% (297 isolated + 11 live = 308/308)", "frontend": "100% smoke"},
+  "test_credentials": "Admin seed 'alpha bravo charlie delta echo foxtrot golf hotel india juliet' (bank PIN 1001). User: session_id discord_test_1, JWT in /root/logs/token.txt (sv=3 after this run). To regenerate: sign HS256 with JWT_SECRET, claim {sub:'discord_test_1', role:'user', sv:<users.session_version>, exp}.",
+  "seed_data_creation": "None new. Test uses pre-existing discord_test_1. It temporarily withdraws one skin and admin-cancels it back; temporarily rewrites roblox_link to check recipient_changed and restores it; creates one confirmed deposit chat (skin credit path). No bank_state reset performed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live suite is at /app/backend/tests/test_live_review.py, marked @pytest.mark.live so it is excluded from the default '-m not live' run. Invoke with `python -m pytest -m live tests/test_live_review.py`. The tests are ordered so logout runs last (test_zzz_logout_revokes_token) and regenerates /root/logs/token.txt with the new session_version. If session_version differs after your changes, either delete /root/logs/token.txt and re-sign, or update the file with a fresh signed token before UI tests. Frontend selectors verified: header-balance, promo-input, promo-apply-button, my-requests-tab-active, my-requests-tab-done, admin-chats-load-more (only rendered when has_more=true).",
+  "rca_of_the_issue": "N/A — no regressions found. All review-request items verified working."
+}

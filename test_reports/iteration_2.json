@@ -1,0 +1,35 @@
+{
+  "summary": "Full backend+frontend validation of the support-chat / DonationAlerts / Telegram review request against the public preview URL. Isolated backend suite: 301 pass (-m 'not live'). New live suite tests/test_live_support_payments.py (17 tests, all pass) covers: language-aware welcome (EN/RU via X-Lang), screenshot uploads (401 guest, 400 non-image, 413 >1MB, 201 valid PNG returning attachment_id+expires_at, GET private for owner, 404 for other user, admin GET works, 429 20s-cooldown), DonationAlerts request creation (URL/currency/amount/code/roblox nick present, 409 while pending), 'I paid' once (200 then 409, 404 for other user), Telegram webhook secret (403 no header, 200 with correct sha256[:48]), simulated callbacks (stranger id ignored, 'da:ask' does not credit, 'da:ok' credits & flips deposit to confirmed, re-delivered update_id is idempotent, 'da:rej'/'da:rejok' reject path). UI smoke on /en: donation form (donation-form, donation-currency-USD/EUR, donation-amount-input, card-support-button) all visible under Top up -> Money -> rub-method-card; chat-attach-button + hidden chat-attach-input render once chat.chat is loaded for a logged-in user; admin-telegram-card visible on /admin Chats tab; my-request-donation rows show 'DonationAlerts · 5.00 USD' in Requests -> Completed. Real 'I paid' pressed exactly ONCE (as required). No call to /api/admin/telegram/setup. Money-safety code (confirm_deposit / bank / spin / drop) was NOT modified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Top up -> Requests -> Completed (EN)", "issues": ["DonationAlerts request card subtitle still contains Russian word 'код' when the site language is English: 'DonationAlerts · 5 USD · код BG-XXXXXX'. Should be 'code'. Screenshot in /tmp/ui_req2.png."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_support_payments.py",
+    "/app/backend/tests/test_support_payments.py",
+    "/app/test_reports/pytest/live_support_payments.xml"
+  ],
+  "action_items": [
+    "Minor i18n leak: replace 'код' with 'code' (or use the existing translator) in the Requests list subtitle for donationalerts deposits when lang=en. Likely in frontend/src/components/topup requests list where the subtitle is built."
+  ],
+  "critical_code_review_comments": [
+    "server.py is still ~2975 lines — consider modularising chats/deposits/admin (already noted last iteration).",
+    "backend/.env CHAT_ATTACHMENTS_MAX_MB=1024 is the total-cap (5 GB DB budget); per-file 1 MB is hardcoded in chat_attachments.MAX_BYTES — the two names look confusable, consider renaming to CHAT_ATTACHMENTS_TOTAL_CAP_MB for clarity (non-blocking).",
+    "PyJWT InsecureKeyLengthWarning persists (16-byte HMAC key interpretation) — cosmetic; effective secret is 32 raw bytes if decoded from hex."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_support_payments.py (NEW)",
+    "/root/logs/token2.txt (NEW, discord_test_2 signed JWT)"
+  ],
+  "success_rate": {"backend": "100% (301 isolated + 17 live = 318/318)", "frontend": "100% (all requested selectors verified)"},
+  "test_credentials": "Admin seed 'alpha bravo charlie delta echo foxtrot golf hotel india juliet'. User1: discord_test_1 token in /root/logs/token.txt (sv=3). User2: discord_test_2 token in /root/logs/token2.txt (sv=0, roblox_nick=player_2). Telegram webhook secret = sha256(f'{TELEGRAM_BOT_TOKEN}:{JWT_SECRET}').hexdigest()[:48].",
+  "seed_data_creation": "Created Mongo user discord_test_2 (nickname P2, roblox_nick player_2, roblox_link set, session_version 0). The live fixture cleans discord_test_1/discord_test_2 chats/messages/attachments/pending deposits on start so language-of-welcome assertions are deterministic. One DonationAlerts deposit for discord_test_1 (5 USD) was created and approved via simulated webhook -> status 'confirmed'. Two pending deposits were fully created and processed during the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live suite: python -m pytest -m live tests/test_live_support_payments.py -n 0. It relies on tokens in /root/logs/token.txt and /root/logs/token2.txt (regenerate with JWT_SECRET from backend/.env if sv changes). The fixture wipes chats+pending deposits for the two users at import time — run in isolation, not interleaved with other user-scoped live tests. For real telegram side-effects: create_request+claim_paid send one sendMessage each to the owner; simulated /api/telegram/webhook callbacks only log-fail answerCallbackQuery (expected). Do NOT call /api/admin/telegram/setup. Bank PIN 1001 (default).",
+  "rca_of_the_issue": "N/A — everything in the review request behaves as specified. Only a minor English i18n leak ('код') in the Requests -> Completed subtitle for DonationAlerts entries is worth fixing."
+}

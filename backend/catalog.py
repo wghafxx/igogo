@@ -1,0 +1,58 @@
+"""Built-in rarities and shop catalog (data only; synced to db.shop_items on startup)."""
+
+RARITIES = [
+    {"key": "stock", "label": "Stock", "color": "#b8bcc9"},
+    {"key": "blue", "label": "Blue", "color": "#4b9dff"},
+    {"key": "purple", "label": "Purple", "color": "#a35cff"},
+    {"key": "pink", "label": "Pink", "color": "#ff4fd8"},
+    {"key": "red", "label": "Red", "color": "#ff3b3b"},
+    {"key": "gold", "label": "Gold", "color": "#ffc634"},
+    {"key": "special", "label": "Special", "color": "#ffe27a"},
+    {"key": "forbidden", "label": "Forbidden", "color": "#ff7a1a"},
+]
+
+
+
+IMG = "https://bloxstrike.net/items/bloxstrike-live"
+SHOP_ITEMS = [
+    {"id": "case-glove-case", "type": "Case", "name": "Glove Case", "price": 43.0, "rarity": "red", "image": f"{IMG}/123594181073716.png"},
+    {"id": "case-chrysalis", "type": "Case", "name": "Chrysalis", "price": 44.0, "rarity": "red", "image": f"{IMG}/134467311250667.png"},
+    {"id": "case-glove-case-2", "type": "Case", "name": "Glove Case 2", "price": 50.0, "rarity": "red", "image": f"{IMG}/75374128985311.png"},
+    {"id": "case-1", "type": "Case", "name": "Case #1", "price": 88.0, "rarity": "red", "image": f"{IMG}/103053431273169.png"},
+    {"id": "awp-typhon", "type": "AWP", "name": "Typhon", "price": 110.0, "rarity": "pink", "image": f"{IMG}/136191452368563.png"},
+    {"id": "awp-railgun", "type": "AWP", "name": "Railgun", "price": 152.0, "rarity": "pink", "image": f"{IMG}/124999883032205.png"},
+    {"id": "m4a1s-orchids", "type": "M4A1-S", "name": "Orchids", "price": 242.0, "rarity": "red", "image": f"{IMG}/118636080343193.png"},
+    {"id": "ak47-aniki", "type": "AK-47", "name": "Aniki", "price": 299.0, "rarity": "purple", "image": f"{IMG}/83000635050744.png"},
+    {"id": "package-glock-midas", "type": "Package | Glock-18", "name": "Midas", "price": 396.0, "rarity": "red", "image": f"{IMG}/126726654780672.png"},
+    {"id": "package-tec9-medal", "type": "Package | Tec-9", "name": "Medal.tv", "price": 832.0, "rarity": "red", "image": f"{IMG}/71231444746781.png"},
+    {"id": "awp-bird-hunt", "type": "AWP", "name": "Bird Hunt", "price": 1125.0, "rarity": "red", "image": f"{IMG}/91355488643704.png"},
+    {"id": "m4a1s-anodized-red", "type": "M4A1-S", "name": "Anodized Red", "price": 1580.0, "rarity": "red", "image": f"{IMG}/87908365282079.png"},
+    {"id": "case-lionheart", "type": "Case", "name": "Lionheart", "price": 40.0, "rarity": "red", "image": f"{IMG}/73482740280871.png"},
+    {"id": "case-finishline", "type": "Case", "name": "Finishline Case", "price": 39.0, "rarity": "red", "image": f"{IMG}/114958333422119.png"},
+    {"id": "sports-gloves-imperial", "type": "Sports Gloves", "name": "Imperial", "price": 11299.0, "rarity": "gold", "image": f"{IMG}/75665163318076.png"},
+    {"id": "hand-wraps-aztec", "type": "Hand Wraps", "name": "Aztec", "price": 4250.0, "rarity": "gold", "image": f"{IMG}/90350865435356.png"},
+    {"id": "operator-gloves-reinforced", "type": "Operator Gloves", "name": "Reinforced", "price": 3600.0, "rarity": "gold", "image": f"{IMG}/123073579676420.png"},
+    {"id": "sports-gloves-bumblebee", "type": "Sports Gloves", "name": "Bumblebee", "price": 3050.0, "rarity": "gold", "image": f"{IMG}/116732891350636.png"},
+    {"id": "driver-gloves-gator", "type": "Driver Gloves", "name": "Gator", "price": 1699.0, "rarity": "gold", "image": f"{IMG}/100906379437261.png"},
+    {"id": "karambit-safari", "type": "Karambit", "name": "Safari", "price": 3500.0, "rarity": "gold", "image": f"{IMG}/93690634411905.png"},
+    {"id": "butterfly-safari", "type": "Butterfly", "name": "Safari", "price": 3000.0, "rarity": "gold", "image": f"{IMG}/135033903539257.png"},
+    {"id": "skeleton-safari", "type": "Skeleton", "name": "Safari", "price": 2200.0, "rarity": "gold", "image": f"{IMG}/88859869862052.png"},
+    {"id": "flip-rusted", "type": "Flip", "name": "Rusted", "price": 2000.0, "rarity": "gold", "image": f"{IMG}/127398374106324.png"},
+    {"id": "gut-rusted", "type": "Gut", "name": "Rusted", "price": 1773.0, "rarity": "gold", "image": f"{IMG}/85270959203020.png"},
+    {"id": "awp-overdrive", "type": "AWP", "name": "Overdrive", "price": 725.0, "rarity": "red", "image": f"{IMG}/103061547931238.png"},
+    {"id": "m4a1s-retro", "type": "M4A1-S", "name": "Retro", "price": 450.0, "rarity": "red", "image": f"{IMG}/127638017774749.png"},
+    {"id": "ssg08-onyx", "type": "SSG 08", "name": "Onyx", "price": 749.0, "rarity": "red", "image": f"{IMG}/81009006872507.png"},
+    {"id": "ak47-sakura", "type": "AK-47", "name": "Sakura", "price": 1295.0, "rarity": "red", "image": f"{IMG}/118393450198241.png"},
+    {"id": "flip-violet", "type": "Flip", "name": "Violet", "price": 2599.0, "rarity": "special", "image": f"{IMG}/110253575097439.png"},
+    {"id": "operator-gloves-black-widow", "type": "Operator Gloves", "name": "Black Widow", "price": 6770.0, "rarity": "special", "image": f"{IMG}/84048948308515.png"},
+    {"id": "karambit-fade", "type": "Karambit", "name": "Fade", "price": 13650.0, "rarity": "special", "image": f"{IMG}/74368007102644.png"},
+    {"id": "stiletto-doodle", "type": "Stiletto", "name": "Doodle", "price": 8831.0, "rarity": "special", "image": f"{IMG}/80165507327550.png"},
+    {"id": "operator-gloves-emerald-widow", "type": "Operator Gloves", "name": "Emerald Widow", "price": 16000.0, "rarity": "special", "image": f"{IMG}/93323651655129.png"},
+    {"id": "karambit-scarlet", "type": "Karambit", "name": "Scarlet", "price": 19000.0, "rarity": "special", "image": f"{IMG}/93160113970136.png"},
+    {"id": "deagle-velocity", "type": "Desert Eagle", "name": "Velocity", "price": 120.0, "rarity": "purple", "image": f"{IMG}/99871777586907.png"},
+    {"id": "p90-drft", "type": "P90", "name": "DRFT", "price": 180.0, "rarity": "red", "image": f"{IMG}/129912585396630.png"},
+    {"id": "usp-ajax", "type": "USP-S", "name": "Ajax", "price": 320.0, "rarity": "pink", "image": f"{IMG}/128789343995926.png"},
+    {"id": "m4a1s-phaseprint", "type": "M4A1-S", "name": "Phaseprint", "price": 600.0, "rarity": "red", "image": f"{IMG}/76878278285757.png"},
+    {"id": "deagle-circuit", "type": "Desert Eagle", "name": "Circuit", "price": 950.0, "rarity": "pink", "image": f"{IMG}/96711237869835.png"},
+    {"id": "m4a4-ignition", "type": "M4A4", "name": "Ignition", "price": 1400.0, "rarity": "pink", "image": f"{IMG}/72363970187101.png"},
+]
