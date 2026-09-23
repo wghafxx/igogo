@@ -7,6 +7,8 @@
 - Причина: автокоммит Emergent не включает yarn.lock (в .gitignore он не исключён). frontend/yarn.lock сгенерирован под текущий package.json (`yarn install --frozen-lockfile` → up-to-date) и закоммичен явно.
 - Dockerfile: `COPY frontend/package.json frontend/yarn.lock* ./`; при наличии lockfile — `--frozen-lockfile`, без него — обычная установка с предупреждением (COPY больше не падает).
 
+- Повторный отказ Railway (лог со старой строкой `COPY ... yarn.lock ./` без `*`): собирался старый снимок/Redeploy старого деплоя. Чистая сборка GitHub HEAD проходит (yarn --frozen-lockfile, yarn build, pip). Найден второй блокер: в requirements.txt не было python-multipart → сервер падал при старте в чистом образе; добавлен python-multipart==0.0.32, запуск uvicorn из чистого venv проверен (/api/health 200).
+
 ### Модуль сотрудников (backend)
 - staff_core.py: сотрудники (по Discord ID + Roblox-аккаунт приёма), атомарное взятие заявки, неизменяемые версии отчётов (staff_reports), approve/revision/reject с блокировкой через deposits.staff_state="review" и staff_report_id, возвраты и передачи (staff_moves), audit (staff_audit), восстановление после сбоя, хук сброса экономики (staff_manual, отмена очереди Telegram).
 - Зачисление: план из отчёта → deposits processing → существующий settle_deposit (идемпотентный, продолжается при старте).
