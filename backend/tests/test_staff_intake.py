@@ -425,20 +425,17 @@ class TestRevisionAndReject:
 
 
 class TestTransfers:
-    def test_pending_transfer_then_confirm(self, http, admin, seeded):
+    def test_transfers_endpoint_removed(self, http, seeded):
+        """POST /api/staff/transfers has been removed — should return 405."""
         h = {"Authorization": f"Bearer {seeded['staff_token']}", "User-Agent": UA}
-        ev1 = _upload_ev(http, seeded["staff_token"], "transfer", None)
         tr = http.post(f"{API}/staff/transfers",
-                       json={"items": [{"name": "AK", "qty": 1, "value": 300}], "evidence": [ev1], "note": "tx"},
+                       json={"items": [{"name": "AK", "qty": 1, "value": 300}], "evidence": [], "note": ""},
                        headers={**h, "Content-Type": "application/json"})
-        assert tr.status_code == 201, tr.text
-        move_id = tr.json()["id"]
-        # admin confirm
-        cf = http.post(f"{API}/admin/staff-moves/{move_id}/confirm", headers=admin["headers"])
-        assert cf.status_code == 200
-        # idempotent
-        cf2 = http.post(f"{API}/admin/staff-moves/{move_id}/confirm", headers=admin["headers"])
-        assert cf2.status_code == 409
+        assert tr.status_code in (404, 405), tr.text
+        # GET still returns [] as backwards-compat listing
+        g = http.get(f"{API}/staff/transfers", headers=h)
+        assert g.status_code == 200
+        assert g.json() == []
 
 
 class TestShifts:
