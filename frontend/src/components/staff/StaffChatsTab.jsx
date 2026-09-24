@@ -60,7 +60,7 @@ export default function StaffChatsTab() {
           <PlayerCard user={detail.user} />
           <StaffDepositCard detail={detail} onChanged={refresh} />
           <WithdrawCard chatId={chat.id} withdrawals={detail.withdrawals || []} total={detail.withdrawals_total || 0} readOnly onChanged={() => {}} onCancel={() => {}} />
-          <StaffPaymentsCard payments={detail.payments || []} />
+          <StaffPaymentsCard payments={detail.payments || []} chatId={chat.id} canAct={detail.mine} onChanged={refresh} />
         </>}
         {chat && !detail.user && <div className="rounded-2xl bg-[#13141a] border border-white/[0.05] p-5 text-center text-[12px] text-[#8e91a3]" data-testid="staff-chat-guest-note"><LogIn size={20} className="mx-auto mb-2" />Гость: пополнение станет доступно после входа через Discord.</div>}
         {!chat && <div className="rounded-2xl border border-dashed border-white/[0.08] h-40 flex items-center justify-center text-[12px] text-[#6b6f84]">Карточка игрока</div>}

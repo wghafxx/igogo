@@ -11,6 +11,7 @@ export const RAP_RUB_RATE = 0.5;
 export const MIN_RUB = 35;
 const QUICK_RUB = [50, 100, 250, 500, 1000];
 const DA_CURRENCIES = ["USD", "EUR", "UAH", "KZT", "BYN", "PLN", "TRY", "BRL", "UZS", "RUB"];
+const MIN_BY_CURRENCY = { KZT: 500 };
 
 // Any currency: DonationAlerts steps are posted in the support chat, the owner approves in Telegram.
 const DonationForm = ({ onDone }) => {
@@ -20,9 +21,11 @@ const DonationForm = ({ onDone }) => {
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const value = Number(amount) || 0;
+  const minimum = MIN_BY_CURRENCY[currency] || 0;
+  const tooSmall = value > 0 && value < minimum;
   const submit = async () => {
     if (!authUser) return openAuth();
-    if (busy || value <= 0) return;
+    if (busy || value <= 0 || tooSmall) return;
     setBusy(true);
     try {
       const res = await api.donationRequest(currency, value);
@@ -44,11 +47,12 @@ const DonationForm = ({ onDone }) => {
           <button key={c} type="button" onClick={() => setCurrency(c)} className="m-chip" data-active={currency === c ? "true" : "false"} data-testid={`donation-currency-${c}`}>{c}</button>
         ))}
       </div>
-      <div className="m-input" data-testid="donation-amount-box">
+      <div className="m-input" data-invalid={tooSmall ? "true" : "false"} data-testid="donation-amount-box">
         <input value={amount} onChange={(e) => { const next = e.target.value.replace(",", "."); if (/^\d{0,9}(\.\d{0,2})?$/.test(next)) setAmount(next); }} placeholder="0" inputMode="decimal" data-testid="donation-amount-input" />
         <span className="text-xl text-white/50 font-bold">{currency}</span>
       </div>
-      <button onClick={submit} disabled={busy || (authUser && value <= 0)} className="m-cta" data-testid="card-support-button">
+      {minimum > 0 && <div className={`text-[11px] ${tooSmall ? "text-[#ff8a8a]" : "text-[#7d8194]"}`} data-testid="donation-min-note">{t("da.min_amount").replace("{amount}", minimum).replace("{currency}", currency)}</div>}
+      <button onClick={submit} disabled={busy || (authUser && (value <= 0 || tooSmall))} className="m-cta" data-testid="card-support-button">
         {!authUser ? t("rub.login") : t("da.submit")}
       </button>
       <div className="m-hint" data-testid="donation-rate-note">{t("da.rate_note")}</div>

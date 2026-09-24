@@ -1,11 +1,12 @@
 import React from "react";
 import { Banknote } from "lucide-react";
 import { Card, ago } from "../admin/chat/ui";
+import StaffRejectControl from "./StaffRejectControl";
 
 const METHOD = { donationalerts: "СБП / DonationAlerts", xrocket: "xRocket", cryptobot: "CryptoBot" };
 
 // Read-only: staff sees money top-ups to guide the player; confirmation stays with the owner.
-export default function StaffPaymentsCard({ payments }) {
+export default function StaffPaymentsCard({ payments, chatId, canAct, onChanged }) {
   return (
     <Card title="Пополнение деньгами" icon={Banknote} testId="staff-payments-card">
       {payments.length === 0 ? <div className="text-[12px] text-[#6b6f84]" data-testid="staff-payments-empty">Нет открытых оплат</div> : (
@@ -16,6 +17,7 @@ export default function StaffPaymentsCard({ payments }) {
               {p.declared_amount != null && <div>Сумма: {p.declared_amount} {p.declared_currency || ""}</div>}
               {p.da_code && <div>Код в комментарии доната: <b className="font-mono">{p.da_code}</b></div>}
               <div className={p.paid_claimed_at ? "text-[#7ee2a8]" : "text-[#ffcf5a]"}>{p.paid_claimed_at ? "Игрок нажал «Оплатил» — ждёт проверки главным" : "Ещё не оплачено"}</div>
+              {canAct && !p.paid_claimed_at && p.payment_method === "donationalerts" && <div className="pt-1.5"><StaffRejectControl chatId={chatId} depositId={p.id} onDone={onChanged} testId={`staff-payment-reject-${p.id}`} /></div>}
             </div>
           ))}
         </div>

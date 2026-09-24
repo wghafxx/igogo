@@ -6,6 +6,7 @@ import { Btn, Card } from "../admin/chat/ui";
 import ItemsEditor, { emptyItem, itemsTotal, itemsValid, toPayload } from "./ItemsEditor";
 import EvidenceUploader from "./EvidenceUploader";
 import { EvidenceGallery } from "./EvidenceImage";
+import StaffRejectControl from "./StaffRejectControl";
 
 const Check = ({ checked, onChange, label, testId }) => (
   <label className="flex items-center gap-2.5 cursor-pointer text-[13px]">
@@ -78,6 +79,11 @@ export default function StaffDepositCard({ detail, onChanged }) {
     <Card title="Пополнение скинами" icon={PackageCheck} testId="staff-deposit-card" right={dep ? <StatePill state={state} testId="staff-deposit-state" /> : null}>
       {!detail.mine && <div className="text-[12px] text-[#8e91a3]">Примите чат, чтобы оформить пополнение.</div>}
       {detail.mine && (!dep || ["assigned", "revision"].includes(state)) && <IntakeForm key={latest?.id || chat.id} chatId={chat.id} user={user} previous={state === "revision" ? latest : null} onDone={onChanged} />}
+      {detail.mine && dep && state === "assigned" && !dep.staff_report_id && (
+        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+          <StaffRejectControl chatId={chat.id} depositId={dep.id} onDone={onChanged} testId="staff-skin-reject" />
+        </div>
+      )}
       {detail.mine && state === "review" && (
         <div className="space-y-2 text-[13px]" data-testid="staff-deposit-review">
           <div className="text-[#ffcf5a]">v{latest?.version} на подтверждении у владельца: {fmtRap(latest?.total_rap)} RAP → {fmtRap(latest?.plan?.credited)} RAP. Можно вести другие чаты.</div>

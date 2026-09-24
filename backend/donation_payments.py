@@ -28,6 +28,7 @@ from deposit_settlement import confirm_deposit
 logger = logging.getLogger(__name__)
 METHOD = "donationalerts"
 MAX_RUB = Decimal("500000")
+MIN_AMOUNTS = {"KZT": Decimal("500")}
 
 
 def now():
@@ -94,6 +95,9 @@ async def create_request(db, user, currency, amount, lang, receiver):
     if currency not in CURRENCIES:
         raise HTTPException(400, "Неподдерживаемая валюта")
     amount = parse_amount(amount)
+    minimum = MIN_AMOUNTS.get(currency)
+    if minimum and amount < minimum:
+        raise HTTPException(400, f"Минимальная сумма оплаты картой — {fmt(minimum)} {currency}")
     code = "BG-" + secrets.token_hex(3).upper()
     phrase = await pick_phrase(db, secrets.choice)
     rub_rap = float(rap_for_rub(amount)) if currency == "RUB" else None

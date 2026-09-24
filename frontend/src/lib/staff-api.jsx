@@ -38,6 +38,7 @@ export const staffApi = {
   chatEvidence: (id, file, purpose) => upload(http, `/staff/chats/${enc(id)}/evidence`, file, { purpose }),
   chatReport: (id, payload) => http.post(`/staff/chats/${enc(id)}/report`, payload).then(data),
   chatReturn: (id, payload) => http.post(`/staff/chats/${enc(id)}/return`, payload).then(data),
+  chatReject: (id, depositId, reason) => http.post(`/staff/chats/${enc(id)}/reject`, { deposit_id: depositId, reason }).then(data),
   commands: () => http.get(`/staff/commands`).then(data),
 };
 

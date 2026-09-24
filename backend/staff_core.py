@@ -257,6 +257,22 @@ async def chat_deposit(db, staff, found, create=False):
     return dep
 
 
+async def reject_request(db, staff, found, dep_id, reason):
+    """Staff may reject a skin request before any report (no skins received yet) or an unpaid money top-up."""
+    reason = reason.strip()
+    if not reason:
+        raise HTTPException(400, "Укажите причину")
+    skin = {"id": dep_id, "session_id": found["owner"], "status": "pending", "payment_method": None,
+            "staff_id": {"$in": [None, staff["id"]]}, "staff_report_id": None, "staff_state": {"$in": [None, "assigned"]}}
+    money = {"id": dep_id, "session_id": found["owner"], "status": "pending", "payment_method": "donationalerts", "paid_claimed_at": None}
+    changes = {"$set": {"status": "rejected", "rejection_reason": reason, "resolved_at": now(), "rejected_by": f"staff:{staff['id']}"}}
+    dep = await db.deposits.find_one_and_update({"$or": [skin, money]}, changes, return_document=ReturnDocument.AFTER, projection={"_id": 0})
+    if not dep:
+        raise HTTPException(409, "Отклонить нельзя: по заявке уже есть отчёт о полученных скинах, игрок нажал «Оплатил» или заявка закрыта. Позовите главного")
+    await audit(db, f"staff:{staff['id']}", "deposit_reject", staff["id"], dep_id, {"reason": reason, "method": dep.get("payment_method")})
+    return dep
+
+
 async def assigned(db, staff, dep_id):
     dep = await db.deposits.find_one({"id": dep_id, "staff_id": staff["id"]}, {"_id": 0})
     if not dep:

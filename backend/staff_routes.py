@@ -26,6 +26,11 @@ class DeclineIn(core.Strict):
     reason: str = Field(default="", max_length=500)
 
 
+class RejectIn(core.Strict):
+    deposit_id: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=1, max_length=300)
+
+
 class ShiftEditIn(core.Strict):
     started_at: datetime
     ended_at: datetime
@@ -36,7 +41,7 @@ def _image(data, content_type):
     return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
 
 
-def build_router(db, require_admin, token_user, bot: stg.StaffBot, app_url: str) -> APIRouter:
+def build_router(db, require_admin, token_user, bot: stg.StaffBot, app_url: str, notify_rejected=None) -> APIRouter:
     r = APIRouter(prefix="/api")
 
     async def require_staff(request: Request) -> dict:
@@ -253,6 +258,17 @@ def build_router(db, require_admin, token_user, bot: stg.StaffBot, app_url: str)
         rep = await core.submit_report(db, staff, dep["id"], payload)
         await stg.enqueue(db, bot, rep)
         return rep
+
+    @r.post("/staff/chats/{chat_id}/reject")
+    async def staff_chat_reject(chat_id: str, payload: RejectIn, request: Request):
+        staff = await require_staff(request)
+        found = await core.visible_chat(db, staff, chat_id)
+        if found.get("staff_id") != staff["id"]:
+            raise HTTPException(409, "Сначала примите чат")
+        dep = await core.reject_request(db, staff, found, payload.deposit_id, payload.reason)
+        if notify_rejected:
+            await notify_rejected(dep, payload.reason)
+        return {"ok": True}
 
     @r.post("/staff/chats/{chat_id}/return", status_code=201)
     async def staff_chat_return(chat_id: str, payload: core.ReturnIn, request: Request):

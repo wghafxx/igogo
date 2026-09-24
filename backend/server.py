@@ -2827,7 +2827,7 @@ async def health():
 
 
 app.include_router(api_router)
-app.include_router(staff_routes.build_router(db, require_admin, token_user, staff_bot, APP_URL))
+app.include_router(staff_routes.build_router(db, require_admin, token_user, staff_bot, APP_URL, notify_deposit_rejected))
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR / "static"), name="assets")
