@@ -179,7 +179,81 @@ async def claim(db, staff, dep_id):
     if not dep:
         raise HTTPException(409, "Заявку уже взял другой сотрудник или она закрыта")
     await audit(db, f"staff:{staff['id']}", "claim", staff["id"], dep_id)
+    if dep.get("chat_id"):
+        await db.chats.update_one({"id": dep["chat_id"], "staff_id": None}, {"$set": {"staff_id": staff["id"], "staff_nick": staff.get("nickname"), "receiver_sent_for": staff["id"]}})
     await _tell_player(db, dep, "admin", _receiver_text(r), {"kind": "staff_receiver", "staff_receiver": r})
+    return dep
+
+
+def chat_scope(staff):
+    return {"$or": [{"staff_id": None}, {"staff_id": staff["id"]}]}
+
+
+async def visible_chat(db, staff, chat_id):
+    found = await db.chats.find_one({"id": chat_id, **chat_scope(staff)}, {"_id": 0})
+    if not found:
+        raise HTTPException(404, "Чат не найден или его ведёт другой сотрудник")
+    return found
+
+
+async def take_chat(db, staff, chat_id):
+    """Atomically assign a chat (any number per staff member); another staff member's chat stays untouched."""
+    found = await db.chats.find_one_and_update({"id": chat_id, **chat_scope(staff)},
+                                               {"$set": {"staff_id": staff["id"], "staff_nick": staff.get("nickname")}},
+                                               return_document=ReturnDocument.BEFORE, projection={"_id": 0})
+    if not found:
+        raise HTTPException(409, "Этот чат уже ведёт другой сотрудник")
+    found = await chat.accept(db, chat_id, staff.get("nickname") or "staff")
+    if not str(found.get("owner", "")).startswith("guest:") and found.get("receiver_sent_for") != staff["id"]:
+        r = receiver(staff)
+        await db.chats.update_one({"id": chat_id}, {"$set": {"receiver_sent_for": staff["id"]}})
+        await chat.post_message(db, found, "admin", _receiver_text(r)(chat.lang_of(found)), {"kind": "staff_receiver", "staff_receiver": r})
+    dep = await db.deposits.find_one({"session_id": found["owner"], "status": "pending", "payment_method": None, "staff_id": None}, {"_id": 0, "id": 1})
+    if dep:
+        await _claim_quiet(db, staff, dep["id"], chat_id)
+    return await db.chats.find_one({"id": chat_id}, {"_id": 0})
+
+
+async def _claim_quiet(db, staff, dep_id, chat_id):
+    return await db.deposits.find_one_and_update(
+        {"id": dep_id, "status": "pending", "payment_method": None, "staff_id": None},
+        {"$set": {"staff_id": staff["id"], "staff_nick": staff.get("nickname"), "staff_flow": True, "staff_state": "assigned",
+                  "assigned_at": now(), "staff_receiver": receiver(staff), "chat_id": chat_id}},
+        return_document=ReturnDocument.AFTER, projection={"_id": 0})
+
+
+async def chat_deposit(db, staff, found, create=False):
+    """The staff member's open skin request in this chat; created on demand so every credit has a report."""
+    if found.get("staff_id") != staff["id"]:
+        raise HTTPException(409, "Сначала примите чат")
+    if str(found.get("owner", "")).startswith("guest:"):
+        raise HTTPException(400, "Гостю пополнить нельзя — игрок должен войти через Discord")
+    base = {"session_id": found["owner"], "status": {"$in": ["pending", "processing"]}, "payment_method": None}
+    dep = await db.deposits.find_one(base, {"_id": 0}, sort=[("created_at", 1)])
+    if dep and dep.get("staff_id") not in (None, staff["id"]):
+        raise HTTPException(409, "Заявку игрока ведёт другой сотрудник")
+    if dep and dep.get("staff_id") is None:
+        dep = await _claim_quiet(db, staff, dep["id"], found["id"]) or await db.deposits.find_one({"id": dep["id"]}, {"_id": 0})
+    if dep or not create:
+        return dep
+    user = await db.users.find_one({"session_id": found["owner"]}, {"_id": 0})
+    if not user:
+        raise HTTPException(404, "Аккаунт игрока не найден")
+    try:
+        profile_fields(user.get("roblox_display_name") or "", user.get("roblox_nick") or "", user.get("roblox_link") or "")
+    except HTTPException:
+        raise HTTPException(400, "Игрок не привязал Roblox: Display Name, @username и ссылку") from None
+    dep = {
+        "id": str(uuid.uuid4()), "session_id": found["owner"], "nickname": user.get("nickname"), "discord_id": user.get("discord_id"),
+        "roblox_nick": user.get("roblox_nick"), "roblox_display_name": user.get("roblox_display_name"), "roblox_link": user.get("roblox_link"),
+        "description": "Приём скинов сотрудником через чат", "expected_rap": None, "receiver_id": "support", "receiver_nick": "Поддержка",
+        "promo_id": user.get("promo_id"), "promo_code": user.get("promo_code"), "promo_bonus": float(user.get("promo_bonus") or 0),
+        "status": "pending", "amount": None, "created_at": now(), "resolved_at": None, "via_chat": True, "chat_id": found["id"],
+        "staff_id": staff["id"], "staff_nick": staff.get("nickname"), "staff_flow": True, "staff_state": "assigned",
+        "assigned_at": now(), "staff_receiver": receiver(staff),
+    }
+    await db.deposits.insert_one(dict(dep))
+    await audit(db, f"staff:{staff['id']}", "deposit_create", staff["id"], dep["id"], {"chat_id": found["id"]})
     return dep
 
 

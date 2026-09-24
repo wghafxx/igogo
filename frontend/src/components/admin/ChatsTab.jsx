@@ -11,7 +11,7 @@ import CommandComposer from "./chat/CommandComposer";
 import CoinGrantCard from "./CoinGrantCard";
 import { usePolling } from "../../hooks/usePolling";
 
-const Conversation = ({ detail, busy, text, setText, onSend, onAccept, onClose }) => {
+export const Conversation = ({ detail, busy, text, setText, onSend, onAccept, onClose, loadImage = adminApi.chatAttachment, loadCommands, acceptLabel = "Принять", canClose = true }) => {
   const chat = detail.chat;
   return (
     <section className="flex flex-col min-h-0 min-w-0 rounded-2xl bg-[#0f1015] border border-white/[0.05]" data-testid="admin-chat-window">
@@ -21,11 +21,11 @@ const Conversation = ({ detail, busy, text, setText, onSend, onAccept, onClose }
           <div className="flex items-center gap-2"><span className={`inline-block w-2 h-2 rounded-full shrink-0 ${chat.online ? "bg-[#2ecc71] shadow-[0_0_6px_#2ecc71]" : "bg-[#5f6377]"}`} /><span className="text-[14px] font-black truncate" data-testid="admin-chat-nick">{chat.nickname}</span>{chat.guest && <span className="text-[10px] text-[#8e91a3] bg-white/[0.06] rounded px-1">гость</span>}<StatusPill status={chat.status} testId="admin-chat-status" /></div>
           <div className="text-[11px] text-[#6b6f84]">{chat.online ? <span className="text-[#7ee2a8] font-bold">онлайн</span> : "не в сети"} · активность {fmtTime(chat.updated_at)}{chat.waiting_seconds != null && <span className="text-[#ffcf5a] font-bold"> · ждёт ответа {Math.max(1, Math.floor(chat.waiting_seconds / 60))} мин</span>}</div>
         </div>
-        {chat.status === "open" && <Btn tone="success" onClick={onAccept} disabled={busy} data-testid="admin-chat-accept-button"><Check size={15} /> Принять</Btn>}
-        {chat.status !== "closed" && <Btn tone="danger" onClick={onClose} disabled={busy} data-testid="admin-chat-close-button"><XCircle size={15} /> Закрыть</Btn>}
+        {chat.status === "open" && <Btn tone="success" onClick={onAccept} disabled={busy} data-testid="admin-chat-accept-button"><Check size={15} /> {acceptLabel}</Btn>}
+        {canClose && chat.status !== "closed" && <Btn tone="danger" onClick={onClose} disabled={busy} data-testid="admin-chat-close-button"><XCircle size={15} /> Закрыть</Btn>}
       </header>
-      <ChatMessages messages={detail.messages} mine="admin" testId="admin-chat-messages" className="px-4 py-4" chatId={detail.chat?.id} loadImage={adminApi.chatAttachment} />
-      <CommandComposer text={text} setText={setText} busy={busy} onSend={onSend} placeholder={chat.status === "open" ? "Ответить или выбрать команду по /…" : "Написать игроку или выбрать команду по /…"} />
+      <ChatMessages messages={detail.messages} mine="admin" testId="admin-chat-messages" className="px-4 py-4" chatId={detail.chat?.id} loadImage={loadImage} />
+      <CommandComposer loadCommands={loadCommands} text={text} setText={setText} busy={busy} onSend={onSend} placeholder={chat.status === "open" ? "Ответить или выбрать команду по /…" : "Написать игроку или выбрать команду по /…"} />
     </section>
   );
 };

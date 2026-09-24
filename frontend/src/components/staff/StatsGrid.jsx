@@ -20,7 +20,6 @@ export default function StatsGrid({ stats, onPick, testId = "staff-stats" }) {
       <Metric label="Обработано заявок" value={stats.processed} onClick={pick("requests")} testId={`${testId}-processed`} />
       <Metric label="На проверке (ожидает)" value={stats.review.count} sub={`${fmtRap(stats.review.value)} RAP не подтверждено`} onClick={pick("requests")} tone="ring-1 ring-[#ffb000]/25" testId={`${testId}-review`} />
       <Metric label="На доработке / отклонено" value={`${stats.revision} / ${stats.rejected}`} onClick={pick("requests")} testId={`${testId}-revision-rejected`} />
-      <Metric label="Передано владельцу" value={`${stats.transferred.items} шт`} sub={`${fmtRap(stats.transferred.value)} RAP`} onClick={pick("moves")} testId={`${testId}-transferred`} />
       <Metric label="Возвращено игрокам" value={`${stats.returned.items} шт`} sub={`${fmtRap(stats.returned.value)} RAP`} onClick={pick("moves")} testId={`${testId}-returned`} />
       <Metric label="Осталось у сотрудника" value={`${stats.holdings.items} шт`} sub={`${fmtRap(stats.holdings.value)} RAP`} onClick={pick("items")} tone="ring-1 ring-[#00a2ff]/25" testId={`${testId}-holdings`} />
       <Metric label="Время работы" value={fmtDuration(stats.worked_seconds)} sub={stats.flags.long_shifts ? `смен > 12 ч: ${stats.flags.long_shifts}` : stats.flags.gaps_seconds ? `без связи ${fmtDuration(stats.flags.gaps_seconds)}` : "без пауз"} onClick={pick("shifts")} testId={`${testId}-worked`} />

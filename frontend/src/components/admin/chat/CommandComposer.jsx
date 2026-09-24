@@ -17,14 +17,14 @@ export function commandPreview(text, commands) {
   return result.length > 2000 ? { error: "Ответ команды длиннее 2000 символов." } : { text: result };
 }
 
-export default function CommandComposer({ text, setText, busy, onSend, placeholder }) {
+export default function CommandComposer({ text, setText, busy, onSend, placeholder, loadCommands = adminApi.commands }) {
   const [commands, setCommands] = useState([]);
   const [error, setError] = useState(false);
   const input = useRef(null);
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      try { const rows = await adminApi.commands(); if (alive) { setCommands(rows); setError(false); } }
+      try { const rows = await loadCommands(); if (alive) { setCommands(rows); setError(false); } }
       catch { if (alive) setError(true); }
     };
     load();

@@ -259,7 +259,7 @@ async def enrich_chats(db, rows):
     return rows
 
 
-async def admin_list(db, status="open", q=None, offset=0, limit=100):
+async def admin_list(db, status="open", q=None, offset=0, limit=100, scope=None):
     if status == "all":
         query = {}
     elif status in STATUSES:
@@ -272,6 +272,8 @@ async def admin_list(db, status="open", q=None, offset=0, limit=100):
         owners = [u["session_id"] for u in await db.users.find(
             {"$or": [{"nickname": rx}, {"discord_id": rx}, {"roblox_nick": rx}, {"roblox_link": rx}]}, {"_id": 0, "session_id": 1}).to_list(200)]
         query = {"$and": [query, {"$or": [{"nickname": rx}, {"discord_id": rx}, {"roblox_nick": rx}, {"owner": {"$in": owners}}]}]} if query else {"$or": [{"nickname": rx}, {"discord_id": rx}, {"roblox_nick": rx}, {"owner": {"$in": owners}}]}
+    if scope:
+        query = {"$and": [query, scope]} if query else scope
     order = 1 if status == "open" else -1
     page = await db.chats.find(query, {"_id": 0}).sort([("updated_at", order), ("id", 1)]).skip(offset).limit(limit + 1).to_list(limit + 1)
     has_more = len(page) > limit
@@ -307,9 +309,9 @@ async def search_users(db, q):
     return out
 
 
-async def admin_summary(db):
+async def admin_summary(db, scope=None):
     rows = await db.chats.aggregate([
-        {"$match": {"status": {"$ne": "closed"}}},
+        {"$match": {"status": {"$ne": "closed"}, **(scope or {})}},
         {"$group": {"_id": "$status", "n": {"$sum": 1}, "unread": {"$sum": {"$ifNull": ["$admin_unread", 0]}}}},
     ]).to_list(None)
     by = {r["_id"]: r for r in rows}

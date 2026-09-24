@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from pydantic import Field
 
+import admin_commands
 import live_chat as chat
 import staff_core as core
 import staff_evidence as ev
@@ -150,12 +151,107 @@ def build_router(db, require_admin, token_user, bot: stg.StaffBot, app_url: str)
 
     @r.get("/staff/transfers")
     async def staff_transfers(request: Request):
-        staff = await require_staff(request)
-        return await db.staff_moves.find({"staff_id": staff["id"], "kind": "transfer"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        await require_staff(request)
+        return []
 
-    @r.post("/staff/transfers", status_code=201)
-    async def staff_transfer(payload: core.TransferIn, request: Request):
-        return await core.submit_transfer(db, await require_staff(request), payload)
+    # ---------- staff chat console (same as the owner's chats, without withdrawals) ----------
+    async def owner_card(found):
+        if str(found.get("owner", "")).startswith("guest:"):
+            return None
+        u = await db.users.find_one({"session_id": found["owner"]}, {"_id": 0, "session_id": 1, "nickname": 1, "discord_id": 1, "roblox_nick": 1,
+                                                                      "roblox_display_name": 1, "roblox_link": 1, "balance": 1, "skins.price": 1,
+                                                                      "promo_code": 1, "promo_bonus": 1, "created_at": 1})
+        if not u:
+            return None
+        skins = u.pop("skins", []) or []
+        return {**u, "balance": float(u.get("balance") or 0), "skins_count": len(skins), "skins_total": round(sum(float(s.get("price") or 0) for s in skins), 2)}
+
+    @r.get("/staff/chats")
+    async def staff_chats(request: Request, status: str = "open", q: Optional[str] = None, offset: int = 0, limit: int = 100):
+        staff = await require_staff(request)
+        return await chat.admin_list(db, status, q, max(0, offset), min(200, max(1, limit)), scope=core.chat_scope(staff))
+
+    @r.get("/staff/chats/summary")
+    async def staff_chats_summary(request: Request):
+        return await chat.admin_summary(db, scope=core.chat_scope(await require_staff(request)))
+
+    @r.get("/staff/commands")
+    async def staff_commands(request: Request):
+        await require_staff(request)
+        return await admin_commands.list_commands(db)
+
+    @r.get("/staff/chats/{chat_id}/messages")
+    async def staff_chat_detail(chat_id: str, request: Request):
+        staff = await require_staff(request)
+        found = await core.visible_chat(db, staff, chat_id)
+        mine = found.get("staff_id") == staff["id"]
+        if mine:
+            await chat.mark_read(db, chat_id, "admin")
+        rows = await chat.messages(db, chat_id)
+        user = await owner_card(found)
+        found = (await chat.enrich_chats(db, [found]))[0]
+        if user:
+            user["online"] = found["online"]
+        dep = await core.chat_deposit(db, staff, found) if mine and user else None
+        reports = await db.staff_reports.find({"deposit_id": dep["id"]}, {"_id": 0, "tg_card": 0}).sort("version", -1).to_list(20) if dep else []
+        return {"chat": {**found, "admin_unread": 0 if mine else found.get("admin_unread", 0)}, "messages": rows, "user": user,
+                "mine": mine, "deposit": dep, "reports": reports}
+
+    @r.post("/staff/chats/{chat_id}/accept")
+    async def staff_chat_accept(chat_id: str, request: Request):
+        return await core.take_chat(db, await require_staff(request), chat_id)
+
+    @r.post("/staff/chats/{chat_id}/messages", status_code=201)
+    async def staff_chat_send(chat_id: str, payload: MessageIn, request: Request):
+        staff = await require_staff(request)
+        found = await core.visible_chat(db, staff, chat_id)
+        if found.get("staff_id") != staff["id"]:
+            found = await core.take_chat(db, staff, chat_id)
+        elif found["status"] != "active":
+            found = await chat.accept(db, chat_id, staff.get("nickname") or "staff")
+        text = await admin_commands.expand(db, payload.text)
+        return await chat.post_message(db, found, "admin", text, {"staff_id": staff["id"], "staff_nick": staff.get("nickname")})
+
+    @r.post("/staff/chats/{chat_id}/close")
+    async def staff_chat_close(chat_id: str, request: Request):
+        staff = await require_staff(request)
+        found = await core.visible_chat(db, staff, chat_id)
+        if found.get("staff_id") != staff["id"]:
+            raise HTTPException(409, "Сначала примите чат")
+        return await chat.close(db, chat_id)
+
+    @r.get("/staff/chats/{chat_id}/attachments/{attachment_id}")
+    async def staff_chat_file(chat_id: str, attachment_id: str, request: Request):
+        await core.visible_chat(db, await require_staff(request), chat_id)
+        doc = await db.chat_attachments.find_one({"id": attachment_id, "chat_id": chat_id})
+        if not doc:
+            raise HTTPException(404, "Файл не найден")
+        return _image(bytes(doc["data"]), doc["content_type"])
+
+    @r.post("/staff/chats/{chat_id}/evidence", status_code=201)
+    async def staff_chat_evidence(chat_id: str, request: Request, file: UploadFile = File(...), purpose: str = Form("intake")):
+        staff = await require_staff(request)
+        found = await core.visible_chat(db, staff, chat_id)
+        dep = await core.chat_deposit(db, staff, found, create=purpose == "intake")
+        if not dep or dep["status"] != "pending":
+            raise HTTPException(409, "Нет открытой заявки в этом чате")
+        return {**await ev.save(db, staff["id"], dep["id"], purpose, file), "deposit_id": dep["id"]}
+
+    @r.post("/staff/chats/{chat_id}/report", status_code=201)
+    async def staff_chat_report(chat_id: str, payload: core.ReportIn, request: Request):
+        staff = await require_staff(request)
+        dep = await core.chat_deposit(db, staff, await core.visible_chat(db, staff, chat_id), create=True)
+        rep = await core.submit_report(db, staff, dep["id"], payload)
+        await stg.enqueue(db, bot, rep)
+        return rep
+
+    @r.post("/staff/chats/{chat_id}/return", status_code=201)
+    async def staff_chat_return(chat_id: str, payload: core.ReturnIn, request: Request):
+        staff = await require_staff(request)
+        dep = await core.chat_deposit(db, staff, await core.visible_chat(db, staff, chat_id))
+        if not dep:
+            raise HTTPException(409, "Нет заявки для возврата")
+        return await core.submit_return(db, staff, dep["id"], payload)
 
     @r.get("/staff/shift")
     async def staff_shift(request: Request):

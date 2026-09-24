@@ -28,6 +28,17 @@ export const staffApi = {
   shift: () => http.get(`/staff/shift`).then(data),
   shiftAction: (action) => http.post(`/staff/shift/${action}`).then(data),
   stats: (params) => http.get(`/staff/stats`, { params }).then(data),
+  chats: (status, q, offset = 0) => http.get(`/staff/chats`, { params: { status, offset, ...(q ? { q } : {}) } }).then(data),
+  chatSummary: () => http.get(`/staff/chats/summary`).then(data),
+  chatDetail: (id) => http.get(`/staff/chats/${enc(id)}/messages`).then(data),
+  chatAccept: (id) => http.post(`/staff/chats/${enc(id)}/accept`).then(data),
+  chatSend: (id, text) => http.post(`/staff/chats/${enc(id)}/messages`, { text }).then(data),
+  chatClose: (id) => http.post(`/staff/chats/${enc(id)}/close`).then(data),
+  chatFile: (id, attachmentId) => http.get(`/staff/chats/${enc(id)}/attachments/${enc(attachmentId)}`, { responseType: "blob" }).then(data),
+  chatEvidence: (id, file, purpose) => upload(http, `/staff/chats/${enc(id)}/evidence`, file, { purpose }),
+  chatReport: (id, payload) => http.post(`/staff/chats/${enc(id)}/report`, payload).then(data),
+  chatReturn: (id, payload) => http.post(`/staff/chats/${enc(id)}/return`, payload).then(data),
+  commands: () => http.get(`/staff/commands`).then(data),
 };
 
 export const adminStaffApi = {

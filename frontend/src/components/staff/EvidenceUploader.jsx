@@ -7,7 +7,7 @@ import { EvidenceImage } from "./EvidenceImage";
 const MAX = 6;
 const MAX_BYTES = 5 * 1024 * 1024;
 
-export default function EvidenceUploader({ value, onChange, purpose, depositId, testId = "evidence-uploader" }) {
+export default function EvidenceUploader({ value, onChange, upload, testId = "evidence-uploader" }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const pick = async (files) => {
@@ -18,7 +18,7 @@ export default function EvidenceUploader({ value, onChange, purpose, depositId, 
     for (const file of list) {
       if (!["image/png", "image/jpeg"].includes(file.type)) { toast.error(`${file.name}: нужен PNG или JPEG`); continue; }
       if (file.size > MAX_BYTES) { toast.error(`${file.name}: больше 5 МБ`); continue; }
-      try { added.push((await staffApi.uploadEvidence(file, purpose, depositId)).id); }
+      try { added.push((await upload(file)).id); }
       catch (e) { toast.error(errText(e, "Не удалось загрузить скриншот")); }
     }
     onChange([...value, ...added]);
