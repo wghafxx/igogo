@@ -116,7 +116,7 @@ export const DepositCard = ({ chatId, user, deposits, onChanged }) => {
   );
 };
 
-export const WithdrawCard = ({ chatId, withdrawals, total, onChanged, onCancel }) => {
+export const WithdrawCard = ({ chatId, withdrawals, total, onChanged, onCancel, readOnly = false }) => {
   const [busy, setBusy] = useState(false);
   const pending = withdrawals.filter((w) => w.status === "pending");
   const doneAll = async () => {
@@ -136,12 +136,14 @@ export const WithdrawCard = ({ chatId, withdrawals, total, onChanged, onCancel }
                 <span className="w-10 h-10 rounded-lg bg-black/30 flex items-center justify-center shrink-0">{w.item?.image && <img src={w.item.image} alt="" className="w-9 h-9 object-contain" />}</span>
                 <span className="flex-1 min-w-0"><span className="block text-[12px] font-bold truncate">{w.item?.name}</span><span className="block text-[11px] text-[#8e91a3] truncate">{w.item?.type} · ждёт {ago(w.created_at)}{w.status === "cancelling" ? " · отмена…" : w.status === "paying" ? " · выдача…" : ""}</span>{w.recipient?.roblox_nick && <span className={`block text-[10px] truncate ${w.recipient_changed ? "text-[#ff9b9b] font-bold" : "text-[#6b6f84]"}`} data-testid="admin-chat-withdrawal-recipient">Получатель по заявке: @{w.recipient.roblox_nick}{w.recipient_changed ? " · профиль игрока изменён после заявки" : ""}</span>}</span>
                 <span className="text-[12px] font-black text-[#ffcf5a] tabular-nums shrink-0">{formatMoney(w.item?.price)}</span>
-                <button onClick={() => onCancel(w)} disabled={busy || w.status === "paying"} title="Отменить вывод" className="w-8 h-8 rounded-lg text-[#8e91a3] hover:bg-[#ff5c5c]/15 hover:text-[#ff8a8a] flex items-center justify-center disabled:opacity-40 shrink-0 transition-colors" data-testid="admin-chat-withdrawal-cancel"><Ban size={14} /></button>
+                {!readOnly && <button onClick={() => onCancel(w)} disabled={busy || w.status === "paying"} title="Отменить вывод" className="w-8 h-8 rounded-lg text-[#8e91a3] hover:bg-[#ff5c5c]/15 hover:text-[#ff8a8a] flex items-center justify-center disabled:opacity-40 shrink-0 transition-colors" data-testid="admin-chat-withdrawal-cancel"><Ban size={14} /></button>}
               </div>
             ))}
           </div>
           <div className="flex items-center justify-between rounded-xl bg-white/[0.04] px-3 py-2.5 text-[12px]"><span className="text-[#a4a7b8]">Итого к выдаче</span><b className="text-[14px] text-[#ffcf5a] tabular-nums" data-testid="admin-chat-withdrawals-total">{formatMoney(total)} RAP</b></div>
-          <Btn tone="primary" size="lg" className="w-full" onClick={doneAll} disabled={busy || !pending.length} data-testid="admin-chat-withdrawals-done-all"><PackageCheck size={16} /> Всё выдано ({pending.length})</Btn>
+          {readOnly
+            ? <div className="rounded-xl bg-[#ffb000]/10 px-3 py-2.5 text-[12px] text-[#ffcf5a]" data-testid="staff-withdrawals-note">Вывод выдаёт главный администратор. Объясните игроку и позовите главного.</div>
+            : <Btn tone="primary" size="lg" className="w-full" onClick={doneAll} disabled={busy || !pending.length} data-testid="admin-chat-withdrawals-done-all"><PackageCheck size={16} /> Всё выдано ({pending.length})</Btn>}
         </div>
       )}
     </Card>

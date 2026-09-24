@@ -194,8 +194,17 @@ def build_router(db, require_admin, token_user, bot: stg.StaffBot, app_url: str)
             user["online"] = found["online"]
         dep = await core.chat_deposit(db, staff, found) if mine and user else None
         reports = await db.staff_reports.find({"deposit_id": dep["id"]}, {"_id": 0, "tg_card": 0}).sort("version", -1).to_list(20) if dep else []
+        withdrawals, payments = [], []
+        if user:
+            # Read-only for staff: they explain the process and call the owner; actions stay owner-only.
+            withdrawals = await db.withdrawals.find({"session_id": found["owner"], "status": {"$in": ["pending", "cancelling", "paying"]}},
+                                                    {"_id": 0, "id": 1, "item": 1, "status": 1, "created_at": 1, "recipient": 1}).sort("created_at", 1).to_list(100)
+            payments = await db.deposits.find({"session_id": found["owner"], "status": {"$in": ["pending", "processing"]}, "payment_method": {"$ne": None}},
+                                              {"_id": 0, "id": 1, "payment_method": 1, "status": 1, "declared_amount": 1, "declared_currency": 1,
+                                               "da_code": 1, "paid_claimed_at": 1, "created_at": 1}).sort("created_at", 1).to_list(20)
         return {"chat": {**found, "admin_unread": 0 if mine else found.get("admin_unread", 0)}, "messages": rows, "user": user,
-                "mine": mine, "deposit": dep, "reports": reports}
+                "mine": mine, "deposit": dep, "reports": reports, "withdrawals": withdrawals, "payments": payments,
+                "withdrawals_total": round(sum(float((w.get("item") or {}).get("price") or 0) for w in withdrawals), 2)}
 
     @r.post("/staff/chats/{chat_id}/accept")
     async def staff_chat_accept(chat_id: str, request: Request):

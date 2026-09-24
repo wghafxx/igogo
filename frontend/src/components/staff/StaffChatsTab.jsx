@@ -4,7 +4,8 @@ import { LogIn, MessagesSquare } from "lucide-react";
 import { staffApi, errText } from "../../lib/staff-api";
 import { Conversation } from "../admin/ChatsTab";
 import ChatSidebar from "../admin/chat/ChatSidebar";
-import { PlayerCard } from "../admin/chat/PlayerPanel";
+import { PlayerCard, WithdrawCard } from "../admin/chat/PlayerPanel";
+import StaffPaymentsCard from "./StaffPaymentsCard";
 import { usePolling } from "../../hooks/usePolling";
 import StaffDepositCard from "./StaffDepositCard";
 
@@ -55,7 +56,12 @@ export default function StaffChatsTab() {
           <p className="text-[12px] text-[#8e91a3] max-w-[320px]">Свободные чаты и чаты, которые вы ведёте. Берите в работу сколько угодно.</p>
         </section>}
       <aside className="min-h-0 overflow-y-auto space-y-4 pr-0.5" data-testid="staff-chat-actions">
-        {chat && detail.user && <><PlayerCard user={detail.user} /><StaffDepositCard detail={detail} onChanged={refresh} /></>}
+        {chat && detail.user && <>
+          <PlayerCard user={detail.user} />
+          <StaffDepositCard detail={detail} onChanged={refresh} />
+          <WithdrawCard chatId={chat.id} withdrawals={detail.withdrawals || []} total={detail.withdrawals_total || 0} readOnly onChanged={() => {}} onCancel={() => {}} />
+          <StaffPaymentsCard payments={detail.payments || []} />
+        </>}
         {chat && !detail.user && <div className="rounded-2xl bg-[#13141a] border border-white/[0.05] p-5 text-center text-[12px] text-[#8e91a3]" data-testid="staff-chat-guest-note"><LogIn size={20} className="mx-auto mb-2" />Гость: пополнение станет доступно после входа через Discord.</div>}
         {!chat && <div className="rounded-2xl border border-dashed border-white/[0.08] h-40 flex items-center justify-center text-[12px] text-[#6b6f84]">Карточка игрока</div>}
       </aside>
