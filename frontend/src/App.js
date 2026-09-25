@@ -9,6 +9,7 @@ import LiveDrop, { LiveDropStrip } from "./components/LiveDrop";
 import UpgradePanel from "./components/UpgradePanel";
 import SkinsSection from "./components/SkinsSection";
 import SettingsModal from "./components/SettingsModal";
+import Seo from "./components/Seo";
 import { BrandAvatar, BrandWordmark } from "./components/Logo";
 import { useSession, loadSettings, saveSettings, normalizeSettings } from "./hooks/useSession";
 import { LangProvider, useLang } from "./lib/i18n";
@@ -110,6 +111,7 @@ const Shell = () => {
 };
 
 const Home = () => {
+  const { lang } = useLang();
   const { sessionId, setStats, user, setUser, refreshUser, refreshDrops, setTopUpOpen, pauseUserRefresh } = useSessionCtx();
   const [settings, setSettings] = useState(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -146,6 +148,11 @@ const Home = () => {
           <BrandWordmark className="block text-[28px] sm:text-[34px] leading-none" testId="page-brand-wordmark" />
         </h1>
       </div>
+      <p className="mb-5 text-center text-sm text-[#b4b7c7] leading-relaxed">
+        {lang === "en"
+          ? "BloxStrike skin upgrades: browse the catalog, choose a target item, and view your inventory and upgrade history."
+          : "Апгрейд скинов BloxStrike: каталог предметов, выбор скина для улучшения, инвентарь и история апгрейдов."}
+      </p>
       <UpgradePanel
         key={sessionId}
         sessionId={sessionId}
@@ -194,6 +201,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <LangProvider>
+          <Seo />
           <AuthProvider>
             <Routes>
               <Route path="/" element={<RootRedirect />} />
