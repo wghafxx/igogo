@@ -1,0 +1,60 @@
+import React, { useState } from "react";
+import { Link } from "../lib/router";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Checkbox } from "./ui/checkbox";
+import DiscordButton from "./DiscordButton";
+import { discordLoginUrl } from "../lib/api";
+import { useLang } from "../lib/i18n";
+
+const Check = ({ checked, onChange, testId, children }) => (
+  <label className="flex items-start gap-3 cursor-pointer select-none">
+    <Checkbox
+      checked={checked}
+      onCheckedChange={(v) => onChange(Boolean(v))}
+      className="mt-0.5 h-[18px] w-[18px] rounded-[5px] border-[#3a3d4d] bg-[#2e2f32] data-[state=checked]:bg-[#fdd911] data-[state=checked]:border-[#fdd911] data-[state=checked]:text-black"
+      data-testid={testId}
+    />
+    <span className="text-[14px] text-[#d5d7e2] leading-snug">{children}</span>
+  </label>
+);
+
+export default function AuthModal({ open, onOpenChange }) {
+  const { t } = useLang();
+  const [adult, setAdult] = useState(false);
+  const [tos, setTos] = useState(false);
+  const ready = adult && tos;
+
+  const startLogin = () => {
+    if (!ready) return;
+    localStorage.setItem("bloxgrade_tos", "1");
+    window.location.href = discordLoginUrl();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="modal-surface border-0 text-white sm:max-w-[460px] p-0 overflow-hidden gap-0" data-testid="auth-modal">
+        <DialogHeader className="modal-head px-6 py-4 text-left">
+          <DialogTitle className="modal-title text-left">{t("auth.title")}</DialogTitle>
+        </DialogHeader>
+        <div className="px-6 pt-5 pb-6 space-y-5">
+          <p className="text-[15px] leading-snug text-white/80" data-testid="auth-modal-text">
+            {t("auth.text")}
+          </p>
+          <div className="space-y-3">
+            <Check checked={adult} onChange={setAdult} testId="auth-adult-checkbox">
+              {t("auth.adult")}
+            </Check>
+            <Check checked={tos} onChange={setTos} testId="auth-tos-checkbox">
+              {t("auth.accept")}{" "}
+              <Link to="/tos" className="text-[#fdd911] font-semibold hover:underline" onClick={() => onOpenChange(false)} data-testid="auth-tos-link">
+                {t("auth.tos")}
+              </Link>{" "}
+              {t("auth.tos_tail")}
+            </Check>
+          </div>
+          <DiscordButton size="lg" className="w-full" onClick={startLogin} disabled={!ready} data-testid="discord-login-button" />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

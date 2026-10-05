@@ -1,0 +1,48 @@
+# Копия -> config.yaml. Затем python calibrate.py и впиши реальные usernames.
+# Ввод в реальную игру; сайта и зачислений нет. Пустой список ЗАПРЕЩАЕТ запуск.
+only_nicks: []
+
+# --- правила приёмки (как сказали) ---
+whitelist_rap: [66, 65, 44, 43, 42]  # Viridian 66, Nebula 65, Chrysalis 44, Glove2/Lionheart 43, Apex/Finishline/Glove 42
+min_total_rap: 35
+max_items: 6
+single_page_only: true   # есть 2-я страница (1/2) -> decline
+check_total_match: true  # сумма слотов должна совпасть с Total RAP, иначе ждём
+auto_focus: true         # сам выводить окно Roblox на передний план
+mouse_backend: interception # Или sendinput с явным allow_sendinput: true
+mouse_device: null       # null = автоопределение; при проблемах конкретный индекс 10..19
+allow_sendinput: false   # Никакого автоматического переключения на другой способ ввода
+accept_stable_sec: 4.0   # accept жмём только если суммы не менялись столько секунд (кд кнопки)
+wait_items_sec: 180      # сколько ждём пока положат кейсы
+wait_window_sec: 15      # сколько ждём открытия окна трейда
+wait_close_sec: 30       # сколько ждём закрытия окна после accept
+max_observation_age_sec: 5.0 # слишком медленное распознавание запрещает ACCEPT
+
+# --- опрос ---
+poll_idle_sec: 1.0        # опрос уведомлений; F8 проверяется также во время пауз
+force_scan_sec: 10.0     # периодически открыть список даже без бейджа
+retry_backoff_sec: 3.0   # повтор после временной ошибки распознавания/нет реакции; список не закрывается
+
+# --- пороги шаблонов (0..1), ниже = чувствительнее ---
+thresholds:
+  badge: 0.8
+  person: 0.85
+  accept: 0.85
+  decline: 0.85
+  close: 0.85
+  list_anchor: 0.88
+  plus: 0.8
+  accept_trade: 0.88
+  decline_trade: 0.88
+  trade_anchor: 0.9
+  success: 0.92
+
+templates_dir: templates
+tesseract_cmd: ""  # пусто = из PATH. Иначе полный путь к tesseract.exe
+ocr_lang: eng
+
+# --- заполняет calibrate.py, руками не трогать ---
+calibration_version: 0   # заполняет калибровщик; старые координаты не используются
+screen: {}
+regions: {}
+points: {}

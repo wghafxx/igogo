@@ -1,0 +1,17 @@
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+frontend/build
+backend/static
+backend/tests
+test_reports
+memory
+tradebot
+assets
+scripts
+.git
+.emergent
+.ruff_cache
+*.md
