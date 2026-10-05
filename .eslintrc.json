@@ -1,0 +1,6 @@
+{
+  "root": true,
+  "parserOptions": { "ecmaVersion": "latest", "sourceType": "module", "ecmaFeatures": { "jsx": true } },
+  "env": { "browser": true, "es2022": true, "node": true, "jest": true },
+  "ignorePatterns": ["node_modules/", "build/", "backend/", "tradebot/"]
+}
