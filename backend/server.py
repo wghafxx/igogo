@@ -1250,6 +1250,8 @@ async def my_referrals(request: Request):
 @serialized_user_action
 async def skins_sell(payload: UidsIn, request: Request):
     user = await require_user(request)
+    if any(sk.get("bonus") for sk in user.get("skins", []) if sk.get("uid") in set(payload.uids)):
+        raise HTTPException(status_code=400, detail="Подарочный скин нельзя продать — используйте его в апгрейде")
     skins = await take_skins(user, payload.uids, credit=True)
     await db.item_history.insert_many(
         [{"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": "sold", "item": sk, "price": float(sk.get("price") or 0), "created_at": now_utc()} for sk in skins]
@@ -1270,6 +1272,9 @@ async def skins_withdraw(payload: UidsIn, request: Request):
         raise HTTPException(status_code=400, detail="Выбранных скинов нет в вашем инвентаре")
     if any(float((owned[u] or {}).get("price") or 0) < 20 for u in uids):
         raise HTTPException(status_code=400, detail="Минимальная цена скина для вывода — 20 RAP")
+    if any(owned[u].get("bonus") for u in uids):
+        raise HTTPException(status_code=400, detail="Подарочный скин нельзя вывести — используйте его в апгрейде")
+    await bonuses.require_wagered(db, user["session_id"])
     since_24h = now_utc() - timedelta(hours=24)
     recent = await db.withdrawals.count_documents(
         {"session_id": user["session_id"], "status": {"$in": ["pending", "done"]}, "created_at": {"$gte": since_24h}}

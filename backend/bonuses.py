@@ -15,6 +15,9 @@ GIFTS = [
 WEEKLY_AMOUNT = 20.0
 WEEKLY_MIN_GAMES = 10
 WEEKLY_NAME = "bloxgrade"
+WAGER_X = 5
+GAME_MIN_STAKE = 1.0
+STAKE = {"$add": [{"$ifNull": ["$bet_amount", 0]}, {"$ifNull": ["$items_total", 0]}]}
 
 
 def now():
@@ -44,6 +47,35 @@ async def _qualifying(db, session_id, gift, since, used):
         {"_id": 0, "id": 1, "rap": 1, "fee": 1, "resolved_at": 1}, sort=[("resolved_at", 1)])
 
 
+async def wager_status(db, session_id):
+    """Bonus value x WAGER_X must be staked in upgrades after the first claim before any withdrawal."""
+    rows = await db.bonus_claims.aggregate([{"$match": {"session_id": session_id}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}, "first": {"$min": "$at"}}}]).to_list(1)
+    if not rows:
+        return {"required": 0.0, "wagered": 0.0, "left": 0.0}
+    required = round(float(rows[0]["total"] or 0) * WAGER_X, 2)
+    done = await db.upgrades.aggregate([{"$match": {"session_id": session_id, "created_at": {"$gte": rows[0]["first"]}}},
+        {"$group": {"_id": None, "s": {"$sum": STAKE}}}]).to_list(1)
+    wagered = round(float(done[0]["s"]) if done else 0.0, 2)
+    return {"required": required, "wagered": min(wagered, required), "left": round(max(0.0, required - wagered), 2)}
+
+
+async def require_wagered(db, session_id):
+    left = (await wager_status(db, session_id))["left"]
+    if left > 0:
+        raise HTTPException(400, f"Сначала отыграйте бонус: осталось сделать ставок на {left:.2f} RAP в апгрейдах")
+
+
+async def _roblox_guard(db, user):
+    nick = (user.get("roblox_nick") or "").strip().lower()
+    if not nick or not user.get("roblox_link"):
+        raise HTTPException(400, "Сначала привяжите Roblox-профиль в профиле сайта")
+    other = await db.bonus_claims.find_one({"roblox_nick": nick, "session_id": {"$ne": user["session_id"]}}, {"_id": 1})
+    if other:
+        raise HTTPException(409, "Бонусы для этого Roblox-аккаунта уже получены на другом аккаунте сайта")
+    return nick
+
+
 async def state(db, user):
     bonus = user.get("bonus") or {}
     claims = bonus.get("claims") or {}
@@ -68,13 +100,14 @@ async def state(db, user):
         prev_done = bool(claim)
         gifts.append(out)
     start, end, key = week_bounds()
-    games = await db.upgrades.count_documents({"session_id": user["session_id"], "created_at": {"$gte": start, "$lt": end}})
+    games = await db.upgrades.count_documents({"session_id": user["session_id"], "created_at": {"$gte": start, "$lt": end},
+                                               "$expr": {"$gte": [STAKE, GAME_MIN_STAKE]}})
     name_ok = WEEKLY_NAME in (user.get("roblox_display_name") or "").lower()
     weekly = {"amount": WEEKLY_AMOUNT, "min_games": WEEKLY_MIN_GAMES, "games": games, "access": bool(user.get("weekly_bonus_access")),
               "name_ok": name_ok, "display_name": user.get("roblox_display_name"), "claimed": user.get("weekly_claimed_week") == key,
               "resets_at": end}
     weekly["can_claim"] = weekly["access"] and name_ok and games >= WEEKLY_MIN_GAMES and not weekly["claimed"]
-    return {"gifts": gifts, "weekly": weekly}
+    return {"gifts": gifts, "weekly": weekly, "wager": {**await wager_status(db, user["session_id"]), "x": WAGER_X}}
 
 
 async def activate(db, user):
@@ -88,6 +121,7 @@ async def claim_gift(db, user, gift_id):
         raise HTTPException(404, "Подарок не найден")
     if current["status"] != "claimable":
         raise HTTPException(409, "Подарок пока недоступен")
+    nick = await _roblox_guard(db, user)
     claim = {"at": now(), "deposit_id": current["deposit_id"]}
     if current["kind"] == "percent":
         claim["amount"] = current["amount"]
@@ -95,14 +129,14 @@ async def claim_gift(db, user, gift_id):
     else:
         if not current["item"]:
             raise HTTPException(409, "Предмет подарка сейчас недоступен. Напишите в поддержку")
-        skin = {**current["item"], "uid": str(uuid.uuid4())}
+        skin = {**current["item"], "uid": str(uuid.uuid4()), "bonus": True}
         claim.update(amount=float(skin.get("price") or 0), skin_uid=skin["uid"])
         change = {"$push": {"skins": skin}}
     change.setdefault("$set", {})[f"bonus.claims.{gift_id}"] = claim
     res = await db.users.update_one({"session_id": user["session_id"], f"bonus.claims.{gift_id}": {"$exists": False}}, change)
     if not res.modified_count:
         raise HTTPException(409, "Подарок уже получен")
-    await db.bonus_claims.insert_one({"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": gift_id, **claim})
+    await db.bonus_claims.insert_one({"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": gift_id, "roblox_nick": nick, **claim})
     if current["kind"] == "skin":
         await db.item_history.insert_one({"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": "bonus", "item": skin,
                                           "price": claim["amount"], "created_at": claim["at"]})
@@ -117,11 +151,12 @@ async def claim_weekly(db, user):
         raise HTTPException(409, "Display Name в Roblox должен быть bloxgrade")
     if st["games"] < WEEKLY_MIN_GAMES:
         raise HTTPException(409, f"Нужно минимум {WEEKLY_MIN_GAMES} игр за неделю")
+    nick = await _roblox_guard(db, user)
     _, _, key = week_bounds()
     res = await db.users.update_one({"session_id": user["session_id"], "weekly_bonus_access": True, "weekly_claimed_week": {"$ne": key}},
                                     {"$set": {"weekly_claimed_week": key}, "$inc": {"balance": WEEKLY_AMOUNT}})
     if not res.modified_count:
         raise HTTPException(409, "Бонус за эту неделю уже получен")
-    await db.bonus_claims.insert_one({"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": "weekly", "week": key,
+    await db.bonus_claims.insert_one({"id": str(uuid.uuid4()), "session_id": user["session_id"], "kind": "weekly", "week": key, "roblox_nick": nick,
                                       "amount": WEEKLY_AMOUNT, "at": now()})
     return await state(db, await db.users.find_one({"session_id": user["session_id"]}, {"_id": 0}))
