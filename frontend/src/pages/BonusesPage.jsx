@@ -9,19 +9,13 @@ import GiftCard from "../components/bonuses/GiftCard";
 import WeeklyCard from "../components/bonuses/WeeklyCard";
 import { formatMoney } from "../lib/api";
 
-const PREVIEW = [
-  { id: "g1", kind: "percent", min_rap: 500, status: "inactive" },
-  { id: "g2", kind: "skin", min_rap: 200, status: "locked", item: { name: "Glove Case", type: "Case", price: 43, image: "https://bloxstrike.net/items/bloxstrike-live/123594181073716.png" } },
-  { id: "g3", kind: "skin", min_rap: 500, status: "locked", item: { name: "Railgun", type: "AWP", price: 152, image: "https://bloxstrike.net/items/bloxstrike-live/124999883032205.png" } },
-  { id: "g4", kind: "skin", min_rap: 2000, status: "locked", item: { name: "Aniki", type: "AK-47", price: 299, image: "https://bloxstrike.net/items/bloxstrike-live/83000635050744.png" } },
-];
 const TEXT = {
   ru: { kicker: "Подарки BLOXGRADE", title: "Бонусы", sub: "Пополняйте и открывайте подарки по цепочке: каждый следующий доступен после получения предыдущего и нового пополнения.", login: "Войти через Discord", req: "Хочу получить доступ к еженедельному бонусу: Display Name в Roblox поменял на bloxgrade." },
   en: { kicker: "BLOXGRADE gifts", title: "Bonuses", sub: "Top up and unlock gifts in order: each next gift opens after claiming the previous one and a new top-up.", login: "Log in with Discord", req: "I want access to the weekly bonus: my Roblox Display Name is now bloxgrade." },
 };
 const RULES = {
-  ru: (x) => [`Перед выводом любых скинов нужно отыграть бонусы: сделать ставок в апгрейдах на сумму бонусов × ${x}.`, "Подарочные скины нельзя вывести или продать — их можно поставить в апгрейд, выигранный скин уже обычный.", "Один Roblox-аккаунт — один набор бонусов. Мультиаккаунты блокируются.", "Засчитываются игры со ставкой от 1 RAP."],
-  en: (x) => [`Before withdrawing any skins, wager your bonuses: upgrade stakes totalling bonuses × ${x}.`, "Gift skins can't be withdrawn or sold — stake them in an upgrade; a won skin is a normal skin.", "One Roblox account — one set of bonuses. Multi-accounts are blocked.", "Only games with a stake of 1 RAP or more count."],
+  ru: (x) => ["Подарки начисляются только за пополнение скинами (с комиссией 20%) и не превышают эту комиссию. Пополнения криптой и рублями не засчитываются.", `Перед выводом любых скинов нужно отыграть бонусы: сделать ставок в апгрейдах на сумму бонусов × ${x}.`, "Подарочные скины нельзя вывести или продать — их можно поставить в апгрейд, выигранный скин уже обычный.", "Один Roblox-аккаунт — один набор бонусов. Мультиаккаунты блокируются.", "Засчитываются игры со ставкой от 1 RAP."],
+  en: (x) => ["Gifts count only skin top-ups (with the 20% fee) and never exceed that fee. Crypto and ruble top-ups don't count.", `Before withdrawing any skins, wager your bonuses: upgrade stakes totalling bonuses × ${x}.`, "Gift skins can't be withdrawn or sold — stake them in an upgrade; a won skin is a normal skin.", "One Roblox account — one set of bonuses. Multi-accounts are blocked.", "Only games with a stake of 1 RAP or more count."],
 };
 
 const WagerBar = ({ wager, lang }) => {
@@ -47,7 +41,7 @@ export default function BonusesPage() {
   const { setTopUpOpen, refreshUser } = useSessionCtx();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => (authUser ? api.bonuses().then(setData).catch(() => {}) : setData(null)), [authUser]);
+  const load = useCallback(() => (authUser ? api.bonuses() : api.bonusCatalog()).then(setData).catch(() => {}), [authUser]);
   useEffect(() => { load(); }, [load]);
   const run = async (fn, ok) => {
     if (busy) return;
@@ -57,7 +51,7 @@ export default function BonusesPage() {
   const support = async () => {
     try { const chat = await api.createChat({ kind: "support", text: t.req }); openLiveChat(chat.id); } catch (e) { toast.error(errText(e, lang)); }
   };
-  const gifts = data?.gifts || PREVIEW;
+  const gifts = data?.gifts || [];
   const topUp = () => (authUser ? setTopUpOpen(true) : openAuth());
   return (
     <div className="max-w-[1180px] mx-auto pb-10" data-testid="bonuses-page">
@@ -77,7 +71,7 @@ export default function BonusesPage() {
       </div>
       {data?.wager?.required > 0 && <div className="mt-5"><WagerBar wager={data.wager} lang={lang} /></div>}
       <div className="mt-5">
-        <WeeklyCard weekly={data?.weekly} lang={lang} busy={busy} authed={Boolean(authUser)} onSupport={support}
+        <WeeklyCard weekly={data?.weekly} amount={data?.weekly_amount} lang={lang} busy={busy} authed={Boolean(authUser)} onSupport={support}
           onClaim={() => run(api.bonusWeekly, lang === "en" ? "+20 RAP credited" : "+20 RAP зачислено")} />
       </div>
       <section className="mt-5 blox-panel p-5 fade-up" data-testid="bonus-rules">

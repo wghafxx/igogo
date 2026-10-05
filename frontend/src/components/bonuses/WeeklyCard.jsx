@@ -22,9 +22,9 @@ const Check3 = ({ ok, label, value, testId }) => (
   </div>
 );
 
-export default function WeeklyCard({ weekly, lang, busy, authed, onClaim, onSupport }) {
+export default function WeeklyCard({ weekly, amount, lang, busy, authed, onClaim, onSupport }) {
   const t = TEXT[lang] || TEXT.ru;
-  const w = weekly || { amount: 20, min_games: 10, games: 0 };
+  const w = weekly || { amount: amount ?? 20, min_games: 10, games: 0 };
   return (
     <section className="bonus-weekly fade-up" style={{ animationDelay: "320ms" }} data-testid="bonus-weekly">
       <div className="flex flex-wrap items-start gap-4">

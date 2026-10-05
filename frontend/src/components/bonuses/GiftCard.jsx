@@ -10,7 +10,7 @@ const TEXT = {
 
 const Reward = ({ gift, t }) => gift.kind === "percent" ? (
   <div className="bonus-reward bonus-reward-pct" data-testid={`bonus-gift-${gift.id}-reward`}>
-    <span className="text-[34px] font-black leading-none text-[#ffcf5a]">+15%</span>
+    <span className="text-[34px] font-black leading-none text-[#ffcf5a]">+{Math.round((gift.pct ?? 0.15) * 100)}%</span>
     <span className="text-[11px] text-[#a4a7b8] mt-1">{t.hint_pct}</span>
   </div>
 ) : (
@@ -36,7 +36,7 @@ export default function GiftCard({ gift, index, lang, busy, onActivate, onClaim,
     <article className={`bonus-gift fade-up ${gift.status}`} style={{ animationDelay: `${index * 70}ms` }} data-testid={`bonus-gift-${gift.id}`} data-status={gift.status}>
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-[#8e91a3]">{t.step} {index + 1}</span>
-        <span className="self-start rounded-full bg-[#ffb000]/10 border border-[#ffb000]/25 px-2.5 py-0.5 text-[11px] font-bold text-[#ffcf5a] whitespace-nowrap" data-testid={`bonus-gift-${gift.id}-min`}>{t.from} {gift.min_rap} {t.rap}</span>
+        <span className="self-start rounded-full bg-[#ffb000]/10 border border-[#ffb000]/25 px-2.5 py-0.5 text-[11px] font-bold text-[#ffcf5a] whitespace-nowrap" data-testid={`bonus-gift-${gift.id}-min`}>{t.from} {Math.round(gift.min_rap)} {t.rap}</span>
       </div>
       <Reward gift={gift} t={t} />
       <div className="text-[11px] text-[#8e91a3] text-center min-h-[16px]" data-testid={`bonus-gift-${gift.id}-status`}>{label}{gift.kind === "percent" ? ` · ${t.once}` : ""}</div>

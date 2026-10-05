@@ -12,6 +12,7 @@ import ChatsTab from "../components/admin/ChatsTab";
 import TelegramCard from "../components/admin/TelegramCard";
 import QuickCommandsTab from "../components/admin/QuickCommandsTab";
 import StaffTab from "../components/admin/StaffTab";
+import BonusesTab from "../components/admin/BonusesTab";
 import { DepositReceipt } from "../components/DepositReceipt";
 import { DepositStatus } from "../components/DepositStatus";
 import { useRequestSound } from "../hooks/useRequestSound";
@@ -200,6 +201,7 @@ export default function AdminPage() {
               ["bank", "Банк"],
               ["players", "Игроки"],
               ["promos", "Промокоды"],
+              ["bonuses", "Бонусы"],
               ["rain", "Удача"],
             ].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} className={`h-8 px-3 rounded-md text-[12px] font-bold transition-colors inline-flex items-center gap-1.5 ${tab === k ? "bg-[#ffb000] text-black" : "text-[#8e91a3] hover:text-white"}`} data-testid={`admin-tab-${k}`}>
@@ -219,6 +221,7 @@ export default function AdminPage() {
         {tab === "players" && <PlayersTab refreshKey={refreshKey} />}
         {tab === "rain" && <RainTab refreshKey={refreshKey} />}
         {tab === "promos" && <PromosTab refreshKey={refreshKey} />}
+        {tab === "bonuses" && <BonusesTab refreshKey={refreshKey} />}
 
         {PAYMENT_TABS.includes(tab) && (
         <div className="space-y-3" data-testid="admin-list">

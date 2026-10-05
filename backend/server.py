@@ -1954,6 +1954,11 @@ async def bonuses_state(request: Request):
     return await bonuses.state(db, await bonus_user(request))
 
 
+@api_router.get("/bonuses/catalog")
+async def bonuses_catalog():
+    return await bonuses.public(db)
+
+
 @api_router.post("/bonuses/activate")
 async def bonuses_activate(request: Request):
     return await bonuses.activate(db, await bonus_user(request))
@@ -1971,6 +1976,30 @@ async def bonuses_weekly(request: Request):
 
 class WeeklyAccessIn(InputModel):
     enabled: bool
+
+
+class BonusSettingsIn(InputModel):
+    g1_pct: Optional[float] = None
+    g1_min_rap: Optional[float] = None
+    g2_min_rap: Optional[float] = None
+    g3_min_rap: Optional[float] = None
+    g4_min_rap: Optional[float] = None
+    commission_share: Optional[float] = None
+    weekly_amount: Optional[float] = None
+    weekly_min_games: Optional[int] = None
+    wager_x: Optional[float] = None
+
+
+@api_router.get("/admin/bonuses")
+async def admin_bonuses(request: Request):
+    await require_admin(request)
+    return await bonuses.admin_overview(db)
+
+
+@api_router.put("/admin/bonuses/settings")
+async def admin_bonuses_settings(payload: BonusSettingsIn, request: Request):
+    await require_admin(request)
+    return await bonuses.save_settings(db, payload.model_dump(exclude_none=True))
 
 
 @api_router.put("/admin/players/{session_id}/weekly-bonus")
