@@ -662,6 +662,7 @@ def win_chance(total_bet: float, target_price: float, rtp: float) -> float:
     return min(MAX_CHANCE, total_bet / target_price * rtp)
 
 
+
 def shown_chance(total_bet: float, target_price: float) -> float:
     """Только для показа: bet/price без house edge (20 на кейс 40 = 50%).
     На победу/дроп не влияет — победа считается по win_chance()."""
