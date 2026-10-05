@@ -1,0 +1,27 @@
+{
+  "summary": "Verified iteration 7 bonus system end-to-end on live preview. Backend: 12/12 pytest in test_bonuses_iteration7.py (fresh-player chain g1 inactive → activate → waiting → admin confirms 600 RAP deposit → g1 claimable with amount=72.0 (15% of 480 net), claim credits +72 and sets wager required=360/left=360; second claim 409; withdraw of a normal 25 RAP skin blocked with 'Сначала отыграйте бонус…'; g2 requires new ≥200 deposit after g1 claim → claim adds Glove Case skin with bonus:true; sell + withdraw of bonus skin → 400 'Подарочный скин нельзя…'; bonus skin usable as bet_item in /api/upgrade (200 OK); same roblox_nick on second account blocked 409 'другом аккаунте'; weekly without access 403; admin PUT /api/admin/players/{sid}/weekly-bonus toggles access; weekly without bloxgrade name 409; weekly with ≥10 games(stake≥1)+bloxgrade name credits +20 and second claim 409; weekly ignores games with stake<1 RAP; /api/upgrade regression OK). Concurrent double-claim stress (6 parallel g1 claims on fresh player): exactly 1×200 + 5×409, bonus_claims collection has 1 doc, race-safe. Frontend: /ru/bonuses renders [data-testid=bonuses-page] with all 4 cards g1..g4 (data-status attributes), WagerBar [bonus-wager]+progress+left text, [bonus-weekly]+[bonus-weekly-support] (no admin access), [bonus-rules], and gift icon [header-bonuses-link] in header. Guest shows [bonuses-login], g1='inactive', g2/g3/g4='locked'. Auth (seed-player-1): g1='claimed'+'+72.00', g2='claimed', g3='waiting', g4='locked'; wager '0,00 / 575,00 RAP' + 'Вывод откроется после ставок ещё на 575,00 RAP'. No horizontal overflow at 1920×1080 or 390×844. All 4 cards fit in one row on desktop and stack cleanly on mobile.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_bonuses_iteration7.py",
+    "/app/test_reports/pytest/iter7_bonuses.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "bonuses.state passes the GIFT dict dicts into the response via {**g, 'item': ...} which includes server-side thresholds and the ITEM_ID (e.g. 'awp-railgun'). Harmless but exposes internal ids to the client — if that matters, strip 'item_id' from the serialized output.",
+    "/api/skins/withdraw does require_wagered BEFORE the daily-10 limit check, so the error message is bonus-wager even when the user is also hitting the daily cap. UX is fine today (wager unlocks first) but worth noting.",
+    "bonuses.claim_gift returns 404 'Подарок не найден' only when gift_id is unknown; otherwise 409. The admin test matrix (claim before deposit, race double-claim, same-nick guard) all route through 409 — consistent and correct.",
+    "weekly 'name_ok' is case-insensitive substring match on 'bloxgrade'. That means a display_name like 'bloxgrade_boss' also qualifies, which is probably intended; if strict equality is required, change bonuses.state to `nick.lower() == WEEKLY_NAME`.",
+    "server.py admin_chat_deposit still contains the long duplicate branch for creating a chat-origin deposit (lines 1846-1862); consider extracting to a helper for readability. No functional issue."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bonuses_iteration7.py (NEW live regression — 12 tests)"
+  ],
+  "success_rate": {"backend": "100% (12/12 live pytest + race stress)", "frontend": "100% (all requested data-testids present, guest+auth states both verified, no overflow)"},
+  "test_credentials": "Admin: alpha…juliet 10-word seed. Player JWT: PLAYER_TOKEN from `python tests/seed_staff.py` (seed-player-1). Fresh test players created directly in Mongo under TEST_bonus_* prefix with their own roblox_nick.",
+  "seed_data_creation": "Each test case in test_bonuses_iteration7.py creates its own fresh TEST_bonus_<suffix>_<hex> session_id so re-runs are self-contained; existing seed-player-1 chain state (g1 claimed 72, g2 claimed 43, wager 575) left untouched. Race test created TEST_bonus_race_* player + 1 bonus_claims doc. All test artefacts stay under TEST_* prefix for easy identification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: `cd /app/backend && python -m pytest tests/test_bonuses_iteration7.py -v -o addopts=''` — all 12 pass against live preview. Each test seeds its own TEST_bonus_* user; safe to re-run. The chat creation endpoint POST /api/chats returns HTTP 201 (not 200) — tests accept both. Admin weekly toggle lives at PUT /api/admin/players/{sid}/weekly-bonus with body {enabled: bool}. Bonus skin flag: skins pushed by claim_gift have bonus:true; /api/skins/sell + /api/skins/withdraw both guard on sk.get('bonus'). Wager = sum(bonus_claims.amount) × 5 for that session_id, counted via upgrades.bet_amount+items_total after the first bonus claim timestamp. PlayerTester already has 2 claims (72+43=115, required 575) → good fixture for wager/withdraw-block UI checks.",
+  "rca_of_the_issue": "N/A — bonus system behaves as specified; no bugs found during iteration 7."
+}
