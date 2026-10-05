@@ -140,8 +140,8 @@ class TestBonusChain:
         state_before = requests.get(f"{API}/bonuses", headers=p["headers"]).json()
         g2b = next(g for g in state_before["gifts"] if g["id"] == "g2")
         assert g2b["status"] == "waiting"
-        # New qualifying deposit (>=200) AFTER g1 claim
-        admin_deposit(admin_headers, p, 200)
+        # New qualifying deposit (>=215) AFTER g1 claim
+        admin_deposit(admin_headers, p, 215)
         state = requests.get(f"{API}/bonuses", headers=p["headers"]).json()
         g2 = next(g for g in state["gifts"] if g["id"] == "g2")
         assert g2["status"] == "claimable", state
@@ -185,7 +185,7 @@ class TestAntiAbuse:
         requests.post(f"{API}/bonuses/activate", headers=p["headers"])
         admin_deposit(admin_headers, p, 600)
         requests.post(f"{API}/bonuses/gifts/g1/claim", headers=p["headers"])
-        admin_deposit(admin_headers, p, 200)
+        admin_deposit(admin_headers, p, 215)
         requests.post(f"{API}/bonuses/gifts/g2/claim", headers=p["headers"])
         user = mongo.users.find_one({"session_id": p["session_id"]}, {"_id": 0, "skins": 1})
         bonus = next(s for s in user["skins"] if s.get("bonus"))

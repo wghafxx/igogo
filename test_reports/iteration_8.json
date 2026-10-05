@@ -1,0 +1,28 @@
+{
+  "summary": "Verified iteration_8 commission-funded bonus system end-to-end on live preview. Backend: 21/21 pytest in tests/test_bonuses_iteration8.py (9 new) + tests/test_bonuses_iteration7.py (12, g2 threshold updated 200→215). Catalog thresholds g1=500 / g2=215 (=ceil(43/0.2)) / g3=760 (=ceil(152/0.2)) / g4=2000 confirmed; fresh player chain: activate → admin confirms 600 RAP skin deposit → g1 claimable amount=72 (=min(480*0.15, 120)); claim credits +72 to balance AND decrements bank_state.commission_profit by exactly 72, bank_ledger has kind='bonus' row with commission_used=72. g2 is 'waiting' at 214 RAP, 'claimable' at 215; claim adds Glove Case (bonus:true) and debits commission_profit by exactly 43. commission_share=0.2 → effective g2 min raised to 1075 and g1 cap=min(dep*0.8*0.15, dep*0.2*0.2) → for 1200 RAP amount=48. Insufficient commission → claim returns 409 'Бонусы временно недоступны', balance+commission unchanged. Concurrency: 6 parallel g1 claims → exactly 1×200 + 5×409, bonus_claims=1 doc, commission_profit decreased only once (refund-on-lost-race works). Weekly claim debits commission_profit by weekly_amount (20) and respects weekly_amount/min_games/wager_x via GET /api/bonuses. Admin validation: g1_pct=0.9 → 400 'допустимо 0–0.25'. Frontend: Guest /ru/bonuses shows all four cards with [bonus-gift-gN-min] = 500/215/760/2000. Admin /admin → tab [admin-tab-bonuses] → [admin-bonuses-tab] renders all inputs ([admin-bonus-g1_pct]=15, g1_min_rap=500, commission_share=100 (%), weekly_amount=20, weekly_min_games=10, wager_x=5), [admin-bonus-effective] lists '+15% к пополнению от 500 RAP / Glove Case от 215 RAP / AWP Railgun от 760 RAP / AK-47 Aniki от 2000 RAP', [admin-bonus-commission-left]=2,424.80, [admin-bonus-spent]=1,668.00·30 шт., 30 [admin-bonus-recent-row]s, [admin-bonus-save] saves successfully, invalid g1_pct=90 shows toast 'g1_pct: допустимо 0–0.25'. Regression (iteration_7): all 12 tests still green with the raised g2 threshold.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_bonuses_iteration8.py",
+    "/app/backend/tests/test_bonuses_iteration7.py",
+    "/app/test_reports/pytest/iter8_bonuses.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "bonuses._gift_value for percent uses deposit_commission(dep)*cfg['commission_share'] as budget — the cap min(rap*0.8*pct, 0.2*rap*share) is correct, but the formula depends on the deposit record carrying payment_method/fee. If an admin-chat deposit is ever written without fee=0.20, g1 amount silently becomes 0 → gift stays 'waiting'. Consider logging/alerting when a chat deposit creates a confirmed row without fee=0.20.",
+    "_take_commission uses an atomic conditional update ($gte guard) → race-safe, good. However, the ensuing users.update_one guard ($exists:false on claims.gift_id) and the refund path cover only the lost-race case; if the users.update_one itself fails/throws between take and insert the commission is debited but no bonus_claims row is written. Low risk, but worth wrapping in try/except with refund.",
+    "settings LIMITS cap commission_share at 0.05 lower bound (not 0) — matches 'min 5%' intent. If admin sets share=0.05 the thresholds explode (e.g., g2≥ceil(43/(0.2*0.05))=4300 RAP) which is correct but could lock out all players; the admin UI should probably show the effective thresholds live as the admin types (currently refreshes only after save).",
+    "weekly bonus commission take happens BEFORE the users.update_one that marks weekly_claimed_week — if the users guard fails (e.g., already claimed this week by another concurrent call) the refund_commission path runs, so this is fine. But two parallel weekly/claim calls both race through _take_commission then one hits refund; make sure refund is monotonic (it is, +amount)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_bonuses_iteration8.py (NEW — 9 tests)",
+    "/app/backend/tests/test_bonuses_iteration7.py (g2 threshold 200→215 per new rules)"
+  ],
+  "success_rate": {"backend": "100% (21/21 live pytest)", "frontend": "100% (guest cards + admin tab + validation toast all verified)"},
+  "test_credentials": "Admin phrases alpha…juliet; players: TEST_bonus8_* created directly in Mongo with HS256 JWT (JWT_SECRET from backend/.env).",
+  "seed_data_creation": "Each test creates its own TEST_bonus8_<suffix>_<hex> session. commission_profit was temporarily set to 1.0 for the insufficient-commission test and restored to the original value in a finally block. commission_share was temporarily set to 0.2 and restored to 1.0.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: `cd /app/backend && python -m pytest tests/test_bonuses_iteration8.py tests/test_bonuses_iteration7.py -v -o addopts=''`. All 21 pass against live preview. Thresholds derive from shop_items prices (glove-case=43, awp-railgun=152, ak47-aniki=299) and commission_share, so if any shop price changes the catalog min_rap values will shift. _take_commission is race-safe (atomic $gte guard + refund on lost users.update_one). Admin tab g1_pct and commission_share are displayed in percent (×100); backend expects decimals (×1).",
+  "rca_of_the_issue": "N/A — the commission-funded bonus system behaves as specified; no bugs found during iteration 8."
+}

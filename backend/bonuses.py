@@ -20,6 +20,9 @@ DEFAULTS = {"g1_pct": 0.15, "g1_min_rap": 500.0, "g2_min_rap": 200.0, "g3_min_ra
             "commission_share": 1.0, "weekly_amount": 20.0, "weekly_min_games": 10, "wager_x": 5.0}
 LIMITS = {"g1_pct": (0, 0.25), "g1_min_rap": (1, 1e6), "g2_min_rap": (1, 1e6), "g3_min_rap": (1, 1e6), "g4_min_rap": (1, 1e6),
           "commission_share": (0.05, 1), "weekly_amount": (0, 1000), "weekly_min_games": (1, 1000), "wager_x": (0, 50)}
+LABELS = {"g1_pct": "Бонус подарка 1, % (0–25)", "g1_min_rap": "Порог подарка 1", "g2_min_rap": "Порог подарка 2", "g3_min_rap": "Порог подарка 3",
+          "g4_min_rap": "Порог подарка 4", "commission_share": "Доля комиссии, % (5–100)", "weekly_amount": "Еженедельный бонус (0–1000)",
+          "weekly_min_games": "Минимум игр (1–1000)", "wager_x": "Отыгрыш (0–50)"}
 WEEKLY_NAME = "bloxgrade"
 GAME_MIN_STAKE = 1.0
 STAKE = {"$add": [{"$ifNull": ["$bet_amount", 0]}, {"$ifNull": ["$items_total", 0]}]}
@@ -49,7 +52,7 @@ async def save_settings(db, changes):
     for k, v in changes.items():
         lo, hi = LIMITS[k]
         if v is None or not lo <= float(v) <= hi:
-            raise HTTPException(400, f"{k}: допустимо {lo}–{hi}")
+            raise HTTPException(400, f"Недопустимое значение: {LABELS[k]}")
         clean[k] = int(v) if k == "weekly_min_games" else round(float(v), 4)
     await db.bonus_settings.update_one({"id": "main"}, {"$set": {**clean, "updated_at": now()}}, upsert=True)
     return await admin_overview(db)
