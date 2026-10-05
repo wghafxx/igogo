@@ -21,10 +21,12 @@ export default function CommandComposer({ text, setText, busy, onSend, placehold
   const [commands, setCommands] = useState([]);
   const [error, setError] = useState(false);
   const input = useRef(null);
+  const loader = useRef(loadCommands);
+  loader.current = loadCommands;
   useEffect(() => {
     let alive = true;
     const load = async () => {
-      try { const rows = await loadCommands(); if (alive) { setCommands(rows); setError(false); } }
+      try { const rows = await loader.current(); if (alive) { setCommands(rows); setError(false); } }
       catch { if (alive) setError(true); }
     };
     load();

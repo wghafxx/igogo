@@ -1,0 +1,32 @@
+{
+  "summary": "Verified iteration 6 fixes end-to-end on live preview. Backend: 7/7 pytest live cases in test_review_iteration6.py (quick commands for admin+staff, admin takeover 409 when report in review, approve staff report credits the player, takeover works for an 'assigned' staff deposit, admin player inventory/balance/skin-remove routes, /api/upgrade no longer rejects with 'unavailable prize'/'payout limit' text). Frontend: admin login (10-word seed), admin→Чаты→В работе → open PlayerTester chat → right panel renders StaffRequestCard with admin-chat-staff-request-<dep>, admin-chat-staff-credited='240 RAP', admin-chat-staff-approve button (two-step: click → admin-chat-staff-approve-confirm → RAP credited, card disappears, admin-chat-deposit/admin-chat-rap-input/admin-chat-confirm-button appear, system message 'зачислено 240.00 …' posted). admin-chat-confirm-button is correctly ABSENT while report is in review (no 409 regression). admin-chat-staff-open-report present. Quick command chips row [data-testid=quick-command-chips] rendered above admin-chat-input with /donat, /nick, /wait; clicking /nick inserts '/nick ' into input, clicking /donat sends command immediately and expanded 'DonationAlerts…' message appears in chat. Players tab: added missing admin-players-search + admin-player-row-<sid> data-testids (small fix); searching 'PlayerTester' returns 1 row; selecting opens admin-player-edit with admin-player-balance-input/save; setting balance 12345.67 → deposit-confirm-submit → balance persisted; admin-player-skin-remove-<uid> confirmed removes a skin (count 9→8, toast 'Удалён Chrysalis'). Players table has NO DEMO column. Home page (/) has NO 'DEMO'/'Демо стримера'/'Выберите цель дешевле'/'Максимальный доступный приз' texts and no [data-testid=game-mode-controls] or [data-testid=payout-limit-message]. /api/upgrade works without the forbidden error strings.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_review_iteration6.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PlayerCoinsPanel.jsx was missing data-testid on the search input and on the result row buttons promised by the review request (admin-players-search, admin-player-row-<sid>). Added by the testing agent so Playwright can select rows deterministically. Main agent: consider standardising testids on all admin forms.",
+    "StaffRequestCard.jsx: ReportSummary GETs /api/admin/staff-reports/{id} every mount. After approve->onChanged() the card unmounts, so this is fine, but if admin opens multiple chats in a row the request fires once per chat open. Harmless, just noting.",
+    "staff_core.takeover sets staff_id='owner' as a sentinel instead of null. The chat scope filter in staff visible_chat is {$or:[{staff_id:null},{staff_id:self.id}]}, so after takeover the chat is no longer in staff's scope (good). But staff.find_one({'session_id': 'owner'...}) would never match — just a reminder that 'owner' is a magic string; DepositForm correctly filters by staff_flow=false.",
+    "server.py is 3082 lines (unchanged from prior iterations). Admin player edit routes near 1947 are compact and OK.",
+    "/staff and /admin both load /api/{admin,staff}/commands every 20s via CommandComposer. Fine for a small list but consider server-sent updates if command count grows."
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/admin/PlayerCoinsPanel.jsx (added admin-players-search + admin-player-row-<sid> data-testids)",
+    "/app/backend/tests/test_review_iteration6.py (NEW live regression, 7 tests)"
+  ],
+  "success_rate": {"backend": "100% (7/7 live pytest)", "frontend": "100% (all requested data-testids and flows verified: StaffRequestCard approve, takeover UI absent in review state, quick command chips send-immediately vs insert, admin player edit balance+skin-remove, no DEMO artifacts on home or players table)"},
+  "test_credentials": "Admin seed phrase 'alpha bravo … juliet' + User-Agent bound session. Player/staff JWTs from `cd /app/backend && python tests/seed_staff.py` (idempotent). Review chat seeded via `python tests/seed_review_chat.py` after rolling back chat.toggle_at (3-min open/close cooldown) and clearing residual pending deposits on seed-player-1.",
+  "seed_data_creation": "Reused seed-player-1/seed-staff-1 from seed_staff.py. Re-seeded a submitted staff report in chat ed8f65af-e08d-4179-bb0c-137d8cb58bdd (300 RAP → 240 credited). The approve test consumed that report during run; a second run will skip approve (pytest.skip) if no 'submitted' report is left — simply re-run seed_review_chat.py (after clearing seed-player-1 pending deposits and resetting chat toggle_at) to rebuild.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: `cd /app/backend && python -m pytest tests/test_review_iteration6.py -v -o addopts=\"\"`. If 'no submitted staff report' skip appears, reseed via: 1) python -c mongo update to roll chat.toggle_at back + mark pending deposits rejected for seed-player-1; 2) python tests/seed_review_chat.py. Frontend: admin login uses admin-seed-word-1..10 inputs (NOT admin-seed-0..9) and admin-login-button. The 'В работе' chat tab is the 2nd status chip. Expected working data-testids on admin chat right panel while report in review: admin-chat-staff-request-<dep>, admin-chat-staff-credited, admin-chat-staff-approve, admin-chat-staff-approve-confirm (after first click), admin-chat-staff-open-report. After approve: admin-chat-deposit + admin-chat-rap-input + admin-chat-confirm-button appear (normal topup). Quick command chips container: quick-command-chips with buttons quick-command-chip-<command>. PlayerCoinsPanel now has admin-players-search + admin-player-row-<sid>. Game-mode/demo artifacts are fully removed from /, backend /api/upgrade has no 'unavailable prize' / 'cheaper target' guard. STAFF_TG_* unset in preview → admin header shows 'Не настроен' (expected).",
+  "rca_of_the_issue": "N/A — all requested fixes are in place and verified."
+}

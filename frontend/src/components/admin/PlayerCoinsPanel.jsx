@@ -25,9 +25,9 @@ export default function PlayerCoinsPanel({ onChanged }) {
     <div className="blox-panel p-4 space-y-3 self-start">
       <h2 className="font-black">Игрок: баланс, инвентарь, начисление</h2>
       <p className="text-[12px] text-[#8e91a3]">Найдите игрока по нику, Discord ID или Roblox. Начисление доступно и без чата или сыгранных игр.</p>
-      <input aria-label="Найти игрока для начисления" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ник, Discord ID, Roblox…" className="w-full rounded-xl bg-white/[0.05] px-3 py-3 outline-none text-[13px]" />
+      <input aria-label="Найти игрока для начисления" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ник, Discord ID, Roblox…" className="w-full rounded-xl bg-white/[0.05] px-3 py-3 outline-none text-[13px]" data-testid="admin-players-search" />
       {status && <p className="text-[12px] text-[#8e91a3]">{status}</p>}
-      <div className="max-h-64 overflow-y-auto space-y-1">{rows.map((u) => <button type="button" key={u.session_id} onClick={() => setSelected(u)} className={`w-full text-left rounded-xl p-3 text-[12px] ${selected?.session_id === u.session_id ? "bg-white/[0.1]" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
+      <div className="max-h-64 overflow-y-auto space-y-1">{rows.map((u) => <button type="button" key={u.session_id} onClick={() => setSelected(u)} className={`w-full text-left rounded-xl p-3 text-[12px] ${selected?.session_id === u.session_id ? "bg-white/[0.1]" : "bg-white/[0.04] hover:bg-white/[0.08]"}`} data-testid={`admin-player-row-${u.session_id}`}>
         <b>{u.nickname}</b> · Discord {u.discord_id}<div className="text-[#8e91a3]">Roblox: {u.roblox_nick || "—"} · Баланс {formatMoney(u.balance)}</div>
       </button>)}</div>
     </div>
