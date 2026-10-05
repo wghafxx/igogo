@@ -89,7 +89,7 @@ const ProfileMenu = ({ t, authUser, onLogout }) => (
 
 export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
   const { authUser, logout, openAuth } = useAuth();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const openTopUp = () => setTopUpOpen(true);
 
   return (
@@ -114,6 +114,10 @@ export default function Header({ stats, user, topUpOpen, setTopUpOpen }) {
           value={<span data-testid="upgrades-count">{formatNumber(stats.upgrades)}</span>}
           icon={<Logo size={16} />}
         />
+        <Link to="/bonuses" className="bonus-nav group" title={lang === "en" ? "Bonuses" : "Бонусы"} data-testid="header-bonuses-link">
+          <img src="/brand/gift.webp" alt="" width="30" height="32" className="bonus-nav-icon" />
+          <span className="hidden lg:inline">{lang === "en" ? "Bonuses" : "Бонусы"}</span>
+        </Link>
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">

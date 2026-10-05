@@ -1,0 +1,2 @@
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZWVkLXBsYXllci0xIiwicm9sZSI6InVzZXIiLCJleHAiOjE3OTM4MDc0NjUsImlhdCI6MTc5MTIxNTQ2NSwic3YiOjB9.lvs0wvyI1AOPhfXmWUigmSO5P6nvYqW3AhsQB0xoAuY
+POST /api/chats {kind:'deposit', expected_rap:300} with PLAYER_TOKEN (id 3d16)

@@ -326,3 +326,34 @@ body {
 .m-note-warn { background: rgba(253, 217, 17, 0.12); color: #ffe44d; }
 .m-note-info { background: rgba(0, 162, 255, 0.12); color: #9fd6ff; }
 .m-note-err { background: rgba(255, 92, 92, 0.12); color: #ff8a8a; }
+
+/* ---------- Bonuses ---------- */
+.bonus-nav { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px 0 6px; border-radius: 12px; background: linear-gradient(180deg, rgba(255,176,0,0.14), rgba(255,92,92,0.08)); border: 1px solid rgba(255,176,0,0.28); color: #ffe2a3; font-weight: 800; font-size: 14px; transition: background-color .2s ease, transform .2s ease; }
+.bonus-nav:hover { transform: translateY(-1px); background: rgba(255,176,0,0.2); }
+.bonus-nav-icon { width: 30px; height: 32px; object-fit: contain; animation: bonus-wiggle 3.2s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(255,80,80,0.35)); }
+.bonus-nav:hover .bonus-nav-icon { animation-duration: .8s; }
+@keyframes bonus-wiggle { 0%, 82%, 100% { transform: rotate(0) scale(1); } 86% { transform: rotate(-10deg) scale(1.08); } 90% { transform: rotate(9deg) scale(1.08); } 94% { transform: rotate(-5deg); } }
+.bonus-hero { position: relative; overflow: hidden; display: flex; align-items: center; gap: 28px; padding: 28px 32px; border-radius: 20px; background: radial-gradient(120% 140% at 0% 0%, rgba(255,176,0,0.16), transparent 55%), #121319; border: 1px solid rgba(255,255,255,0.05); }
+.bonus-hero-gift { width: 150px; height: auto; flex-shrink: 0; animation: bonus-float 4s ease-in-out infinite; filter: drop-shadow(0 18px 30px rgba(255,60,60,0.35)); }
+@keyframes bonus-float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-10px) rotate(3deg); } }
+.bonus-chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.bonus-gift { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: #121319; border: 1px solid rgba(255,255,255,0.05); transition: transform .2s ease, border-color .2s ease; }
+.bonus-gift:hover { transform: translateY(-3px); }
+.bonus-gift.claimable { border-color: rgba(255,176,0,0.55); box-shadow: 0 0 0 1px rgba(255,176,0,0.2), 0 14px 40px rgba(255,176,0,0.12); }
+.bonus-gift.claimed { border-color: rgba(46,204,113,0.35); }
+.bonus-gift.locked { opacity: .55; }
+.bonus-reward { min-height: 128px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 14px; background: radial-gradient(70% 70% at 50% 40%, rgba(255,176,0,0.12), rgba(0,0,0,0.25)); padding: 10px; }
+.bonus-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 44px; border-radius: 12px; font-weight: 800; font-size: 13px; background: rgba(255,255,255,0.06); color: #fff; transition: background-color .2s ease, transform .15s ease; }
+.bonus-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.bonus-btn:active:not(:disabled) { transform: scale(.97); }
+.bonus-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bonus-btn-gold { background: #ffb000; color: #111; }
+.bonus-btn-gold:hover:not(:disabled) { background: #ffc233; }
+.bonus-pulse { animation: bonus-pulse 1.8s ease-in-out infinite; }
+@keyframes bonus-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,176,0,0.45); } 50% { box-shadow: 0 0 0 8px rgba(255,176,0,0); } }
+.bonus-status { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; width: 100%; border-radius: 12px; background: rgba(255,255,255,0.03); font-size: 13px; font-weight: 700; }
+.bonus-weekly { padding: 22px 24px; border-radius: 20px; background: radial-gradient(100% 120% at 100% 0%, rgba(0,162,255,0.10), transparent 55%), #121319; border: 1px solid rgba(255,255,255,0.05); }
+.bonus-weekly .bonus-btn, .bonus-weekly .bonus-status { width: auto; padding: 0 18px; }
+@media (max-width: 1024px) { .bonus-chain { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .bonus-hero { flex-direction: column; text-align: center; padding: 22px 18px; gap: 12px; } .bonus-hero-gift { width: 110px; } .bonus-hero p { margin-left: auto; margin-right: auto; } .bonus-nav { padding: 0 6px; } .bonus-chain { gap: 10px; } .bonus-gift { padding: 12px; } }
+@media (prefers-reduced-motion: reduce) { .bonus-nav-icon, .bonus-hero-gift, .bonus-pulse { animation: none; } }

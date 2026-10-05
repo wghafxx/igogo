@@ -14,7 +14,8 @@ def now():
 
 def _public(user):
     return {"session_id": user["session_id"], "nickname": user.get("nickname"), "balance": float(user.get("balance") or 0),
-            "skins": user.get("skins", []) or []}
+            "skins": user.get("skins", []) or [], "weekly_bonus_access": bool(user.get("weekly_bonus_access")),
+            "roblox_display_name": user.get("roblox_display_name")}
 
 
 async def _journal(db, kind, user_before, admin, **details):
@@ -23,7 +24,7 @@ async def _journal(db, kind, user_before, admin, **details):
 
 
 async def inventory(db, session_id):
-    user = await db.users.find_one({"session_id": session_id}, {"_id": 0, "session_id": 1, "nickname": 1, "balance": 1, "skins": 1})
+    user = await db.users.find_one({"session_id": session_id}, {"_id": 0, "session_id": 1, "nickname": 1, "balance": 1, "skins": 1, "weekly_bonus_access": 1, "roblox_display_name": 1})
     if not user or session_id.startswith("guest:"):
         raise HTTPException(404, "Игрок не найден")
     return _public(user)

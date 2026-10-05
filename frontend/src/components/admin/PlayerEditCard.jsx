@@ -35,6 +35,10 @@ export default function PlayerEditCard({ user, onChanged }) {
           <Btn tone="success" className="h-11" disabled={busy || !data || !valid || value === data?.balance} onClick={() => setConfirm({ kind: "balance" })} data-testid="admin-player-balance-save">Сохранить</Btn>
         </div>
       </Field>
+      {data && <div className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.04] px-3 py-2.5" data-testid="admin-player-weekly">
+        <div className="min-w-0 text-[12px]"><div className="font-bold">Еженедельный бонус 20 RAP</div><div className="text-[11px] text-[#8e91a3] truncate">Display Name: {data.roblox_display_name || "—"}</div></div>
+        <Btn size="sm" tone={data.weekly_bonus_access ? "danger" : "success"} disabled={busy} onClick={async () => { setBusy(true); try { setData(await adminApi.weeklyBonusAccess(user.session_id, !data.weekly_bonus_access)); toast.success(data.weekly_bonus_access ? "Доступ закрыт" : "Доступ к бонусу выдан"); } catch (e) { toast.error(errText(e)); } finally { setBusy(false); } }} data-testid="admin-player-weekly-toggle">{data.weekly_bonus_access ? "Закрыть доступ" : "Выдать доступ"}</Btn>
+      </div>}
       <div className="text-[11px] text-[#8e91a3]">Инвентарь · {skins.length} шт.</div>
       {skins.length === 0 ? <div className="h-12 flex items-center justify-center text-[12px] text-[#6b6f84]" data-testid="admin-player-inventory-empty">Инвентарь пуст</div> : (
         <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1" data-testid="admin-player-inventory">

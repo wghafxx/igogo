@@ -45,6 +45,7 @@ import live_chat as chat
 import admin_commands
 import admin_coins
 import admin_player_edit
+import bonuses
 import economy_guard
 import economy_reset
 import referrals
@@ -1934,6 +1935,46 @@ async def admin_player_coins(session_id: str, payload: AdminCoinsIn, request: Re
 async def admin_player_coin_history(session_id: str, request: Request):
     await require_admin(request)
     return [admin_coins.public(row) for row in await db.admin_coin_grants.find({"session_id": session_id, "status": {"$ne": "reset"}}).sort("created_at", -1).to_list(10)]
+
+
+async def bonus_user(request: Request) -> dict:
+    user = await token_user(request)
+    if not user:
+        raise HTTPException(401, "Войдите через Discord")
+    return user
+
+
+@api_router.get("/bonuses")
+async def bonuses_state(request: Request):
+    return await bonuses.state(db, await bonus_user(request))
+
+
+@api_router.post("/bonuses/activate")
+async def bonuses_activate(request: Request):
+    return await bonuses.activate(db, await bonus_user(request))
+
+
+@api_router.post("/bonuses/gifts/{gift_id}/claim")
+async def bonuses_claim(gift_id: str, request: Request):
+    return await bonuses.claim_gift(db, await bonus_user(request), gift_id)
+
+
+@api_router.post("/bonuses/weekly/claim")
+async def bonuses_weekly(request: Request):
+    return await bonuses.claim_weekly(db, await bonus_user(request))
+
+
+class WeeklyAccessIn(InputModel):
+    enabled: bool
+
+
+@api_router.put("/admin/players/{session_id}/weekly-bonus")
+async def admin_weekly_access(session_id: str, payload: WeeklyAccessIn, request: Request):
+    await require_admin(request)
+    res = await db.users.update_one({"session_id": session_id}, {"$set": {"weekly_bonus_access": payload.enabled}})
+    if not res.matched_count:
+        raise HTTPException(404, "Игрок не найден")
+    return await admin_player_edit.inventory(db, session_id)
 
 
 class AdminBalanceIn(InputModel):

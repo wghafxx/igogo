@@ -51,6 +51,7 @@ import { openLiveChat, openRubTopUp } from "./lib/events";
 
 // Secondary pages are split into their own chunks so the home screen loads with the minimum JS.
 const TosPage = lazy(() => import("./pages/TosPage"));
+const BonusesPage = lazy(() => import("./pages/BonusesPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const AuthCallbackPage = lazy(() => import("./pages/AuthCallbackPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -214,6 +215,7 @@ function App() {
                 <Route element={<Shell />}>
                   <Route index element={<Home />} />
                   <Route path="tos" element={<TosPage />} />
+                  <Route path="bonuses" element={<BonusesPage />} />
                   <Route path="privacy" element={<PrivacyPage />} />
                   <Route path="profile" element={<ProfilePage />} />
                   <Route path="users/:discordId" element={<PublicProfilePage />} />
